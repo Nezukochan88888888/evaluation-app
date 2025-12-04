@@ -2,16 +2,134 @@
 
 {% block content %}
 <div class="container mt-4">
-  <h1>Leaderboard</h1>
-  {% if users and users|length > 0 %}
-  <ol>
-    {% for u in users %}
-      <li>{{ u.username }} — {{ u.marks or 0 }}</li>
-    {% endfor %}
-  </ol>
-  {% else %}
-  <p>No scores yet.</p>
-  {% endif %}
-  <p><a href="{{ url_for('home') }}">Back to Home</a></p>
+    <div class="row">
+        <div class="col-12 text-center">
+            <h1 class="mb-4">🏆 Top Performers 🏆</h1>
+            <p class="text-muted">Celebrating our quiz champions</p>
+        </div>
+    </div>
+
+    {% if users and users|length > 0 %}
+        <div class="row justify-content-center mt-5">
+            <!-- Podium Display -->
+            <div class="col-12 col-md-10 col-lg-8">
+                <div class="d-flex justify-content-center align-items-end" style="height: 300px;">
+                    
+                    <!-- Second Place (if exists) -->
+                    {% if users|length >= 2 %}
+                    <div class="text-center mx-3" style="margin-bottom: 50px;">
+                        <div class="card border-secondary" style="width: 120px;">
+                            <div class="card-body text-center py-3" style="background: linear-gradient(45deg, #C0C0C0, #E5E5E5);">
+                                <h5 class="card-title mb-1">🥈</h5>
+                                <h6 class="card-subtitle mb-2">2nd Place</h6>
+                                <p class="card-text font-weight-bold">{{ users[1].username }}</p>
+                                <span class="badge badge-secondary">{{ users[1].marks or 0 }} pts</span>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    <!-- First Place -->
+                    <div class="text-center mx-3">
+                        <div class="card border-warning" style="width: 140px;">
+                            <div class="card-body text-center py-4" style="background: linear-gradient(45deg, #FFD700, #FFF700);">
+                                <h4 class="card-title mb-1">👑</h4>
+                                <h5 class="card-subtitle mb-2 text-dark">CHAMPION</h5>
+                                <p class="card-text font-weight-bold text-dark">{{ users[0].username }}</p>
+                                <span class="badge badge-warning text-dark font-weight-bold">{{ users[0].marks or 0 }} pts</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Third Place (if exists) -->
+                    {% if users|length >= 3 %}
+                    <div class="text-center mx-3" style="margin-bottom: 80px;">
+                        <div class="card border-dark" style="width: 110px;">
+                            <div class="card-body text-center py-2" style="background: linear-gradient(45deg, #CD7F32, #D4A574);">
+                                <h6 class="card-title mb-1">🥉</h6>
+                                <small class="card-subtitle mb-2 d-block">3rd Place</small>
+                                <p class="card-text font-weight-bold">{{ users[2].username }}</p>
+                                <span class="badge badge-dark">{{ users[2].marks or 0 }} pts</span>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+
+                </div>
+            </div>
+        </div>
+
+        <!-- Achievement Cards -->
+        <div class="row mt-5">
+            {% for user in users %}
+            <div class="col-md-4 mb-3">
+                <div class="card h-100 
+                    {% if loop.index == 1 %}border-warning{% elif loop.index == 2 %}border-secondary{% else %}border-dark{% endif %}">
+                    <div class="card-body text-center">
+                        <h5 class="card-title">
+                            {% if loop.index == 1 %}🥇
+                            {% elif loop.index == 2 %}🥈
+                            {% else %}🥉
+                            {% endif %}
+                            {{ user.username }}
+                        </h5>
+                        <p class="card-text">
+                            <span class="h4 
+                                {% if loop.index == 1 %}text-warning{% elif loop.index == 2 %}text-secondary{% else %}text-dark{% endif %}">
+                                {{ user.marks or 0 }}
+                            </span>
+                            <br>
+                            <small class="text-muted">points scored</small>
+                        </p>
+                        <span class="badge 
+                            {% if loop.index == 1 %}badge-warning{% elif loop.index == 2 %}badge-secondary{% else %}badge-dark{% endif %} badge-lg">
+                            Rank #{{ loop.index }}
+                        </span>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    {% else %}
+        <div class="row">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-body text-center py-5">
+                        <i class="fas fa-trophy fa-3x text-muted mb-3"></i>
+                        <h4 class="text-muted">No Scores Yet</h4>
+                        <p class="text-muted">Be the first to complete the quiz and claim the top spot!</p>
+                        {% if current_user.is_authenticated and not current_user.is_admin %}
+                            <a href="{{ url_for('start_quiz') }}" class="btn btn-primary">
+                                <i class="fas fa-play"></i> Take Quiz Now
+                            </a>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    {% endif %}
+
+    <div class="row mt-4">
+        <div class="col-12 text-center">
+            <a href="{{ url_for('home') }}" class="btn btn-outline-primary">
+                <i class="fas fa-home"></i> Back to Home
+            </a>
+        </div>
+    </div>
 </div>
+
+<style>
+.badge-lg {
+    padding: 0.5rem 0.75rem;
+    font-size: 0.9rem;
+}
+
+.card {
+    transition: transform 0.3s ease;
+}
+
+.card:hover {
+    transform: translateY(-5px);
+}
+</style>
 {% endblock %}

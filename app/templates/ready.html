@@ -1,0 +1,149 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-md-8 col-lg-6">
+            <div class="card shadow-lg">
+                <div class="card-header text-center bg-primary text-white">
+                    <h3 class="mb-0">
+                        <i class="fas fa-clock"></i> Get Ready
+                    </h3>
+                </div>
+                
+                <div class="card-body text-center py-5">
+                    <div class="mb-4">
+                        <h1 class="display-4 text-primary mb-3">
+                            Question #{{ q_id }}
+                        </h1>
+                        
+                        <div class="alert alert-info mb-4">
+                            <h5 class="mb-2">
+                                <i class="fas fa-stopwatch"></i> Time Limit
+                            </h5>
+                            <h3 class="text-dark mb-0">{{ time_limit }} seconds</h3>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-4">
+                        <p class="lead text-muted">
+                            You are about to start this question. Once you click "Start Question", 
+                            the timer will begin immediately and cannot be paused.
+                        </p>
+                        
+                        <div class="alert alert-warning">
+                            <i class="fas fa-exclamation-triangle"></i>
+                            <strong>Important:</strong> Make sure you are ready to answer before starting!
+                        </div>
+                    </div>
+                    
+                    <form method="POST" action="{{ url_for('start_timer', q_id=q_id) }}" id="startForm">
+                        <button type="submit" class="btn btn-success btn-lg px-5 py-3" id="startBtn">
+                            <i class="fas fa-play"></i> Start Question
+                        </button>
+                    </form>
+                    
+                    <div class="mt-4">
+                        <small class="text-muted">
+                            Question {{ current_question }} of {{ total_questions }}
+                        </small>
+                    </div>
+                </div>
+                
+                <div class="card-footer text-center bg-light">
+                    <small class="text-muted">
+                        <i class="fas fa-shield-alt"></i> 
+                        Timer is enforced server-side for fairness
+                    </small>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.card {
+    border: none;
+    border-radius: 15px;
+}
+
+.card-header {
+    border-radius: 15px 15px 0 0 !important;
+}
+
+.card-footer {
+    border-radius: 0 0 15px 15px !important;
+    border-top: 1px solid #e3e6f0;
+}
+
+.btn-success {
+    background: linear-gradient(45deg, #28a745, #20c997);
+    border: none;
+    border-radius: 10px;
+    font-weight: 600;
+    transition: all 0.3s ease;
+}
+
+.btn-success:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(40, 167, 69, 0.4);
+}
+
+.display-4 {
+    font-weight: 700;
+}
+
+.alert {
+    border-radius: 10px;
+    border: none;
+}
+
+.alert-info {
+    background: linear-gradient(45deg, #d1ecf1, #e2f3f5);
+    color: #0c5460;
+}
+
+.alert-warning {
+    background: linear-gradient(45deg, #fff3cd, #ffeaa7);
+    color: #856404;
+}
+
+@media (max-width: 768px) {
+    .card-body {
+        padding: 2rem 1rem;
+    }
+    
+    .display-4 {
+        font-size: 2.5rem;
+    }
+    
+    .btn-lg {
+        padding: 1rem 2rem;
+        font-size: 1.1rem;
+    }
+}
+</style>
+
+<script>
+// Prevent accidental navigation away from page
+window.addEventListener('beforeunload', function(e) {
+    if (!document.getElementById('startBtn').disabled) {
+        e.preventDefault();
+        e.returnValue = '';
+    }
+});
+
+// Disable button after click to prevent double submission
+document.getElementById('startForm').addEventListener('submit', function() {
+    var btn = document.getElementById('startBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Starting...';
+});
+
+// Disable back button navigation
+history.pushState(null, null, location.href);
+window.onpopstate = function() {
+    history.go(1);
+};
+</script>
+{% endblock %}

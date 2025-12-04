@@ -7,8 +7,21 @@
             <div class="d-flex justify-content-between align-items-center mb-4">
                 <h1>Student Scores & Performance</h1>
                 <div>
-                    <a href="{{ url_for('bulk_upload.index') }}" class="btn btn-info mr-2">
-                        <i class="fas fa-upload"></i> Add Students
+                    <a href="{{ url_for('admin_add_student') }}" class="btn btn-primary mr-2">
+                        <i class="fas fa-user-plus"></i> Add Student
+                    </a>
+                    <a href="{{ url_for('admin_export_scores') }}" class="btn btn-secondary mr-2" title="Download CSV">
+                        <i class="fas fa-download"></i> Export CSV
+                    </a>
+                    <form method="POST" action="{{ url_for('admin_reset_scores') }}" class="d-inline mr-2">
+                        <button type="submit" class="btn btn-warning" 
+                                onclick="return confirm('Are you sure you want to reset ALL student scores? This will allow all students to retake the quiz.');"
+                                title="Reset all scores">
+                            <i class="fas fa-undo"></i> Reset All Scores
+                        </button>
+                    </form>
+                    <a href="{{ url_for('admin_bulk_upload_questions') }}" class="btn btn-info mr-2">
+                        <i class="fas fa-upload"></i> Bulk Upload
                     </a>
                     <a href="{{ url_for('leaderboard') }}" class="btn btn-success">
                         <i class="fas fa-trophy"></i> Public Leaderboard
@@ -42,7 +55,12 @@
                     <div class="col-md-3">
                         <div class="card bg-info text-white">
                             <div class="card-body text-center">
-                                <h4>{{ ((students|map(attribute='marks')|select|sum) / (students|selectattr("marks")|list|length or 1))|round(1) }}</h4>
+                                {% set mark_list = students|map(attribute='marks')|select|list %}
+                                {% if mark_list|length > 0 %}
+                                    <h4>{{ (mark_list|sum / mark_list|length)|round(1) }}</h4>
+                                {% else %}
+                                    <h4>0</h4>
+                                {% endif %}
                                 <p class="mb-0">Average Score</p>
                             </div>
                         </div>
@@ -50,7 +68,12 @@
                     <div class="col-md-3">
                         <div class="card bg-warning text-white">
                             <div class="card-body text-center">
-                                <h4>{{ students|map(attribute='marks')|select|max or 0 }}</h4>
+                                {% set mark_list = students|map(attribute='marks')|select|list %}
+                                {% if mark_list|length > 0 %}
+                                    <h4>{{ mark_list|max }}</h4>
+                                {% else %}
+                                    <h4>0</h4>
+                                {% endif %}
                                 <p class="mb-0">Highest Score</p>
                             </div>
                         </div>
@@ -113,14 +136,17 @@
                                             </td>
                                             <td>
                                                 {% if student.marks is not none and student.marks > 0 %}
-                                                    <button type="button" class="btn btn-sm btn-outline-warning" 
+                                                    <button type="button" class="btn btn-sm btn-outline-warning mr-1" 
                                                             onclick="confirmReset('{{ student.username }}', {{ student.id }})" 
                                                             title="Reset Score">
                                                         <i class="fas fa-redo"></i>
                                                     </button>
-                                                {% else %}
-                                                    <small class="text-muted">No actions</small>
                                                 {% endif %}
+                                                <button type="button" class="btn btn-sm btn-outline-danger" 
+                                                        onclick="confirmDelete('{{ student.username }}', {{ student.id }})" 
+                                                        title="Delete Student">
+                                                    <i class="fas fa-trash"></i>
+                                                </button>
                                             </td>
                                         </tr>
                                     {% endfor %}
@@ -139,7 +165,10 @@
                         <i class="fas fa-users fa-3x text-muted mb-3"></i>
                         <h4 class="text-muted">No Students Registered</h4>
                         <p class="text-muted">Students can register themselves, or you can add them using bulk upload.</p>
-                        <a href="{{ url_for('bulk_upload.index') }}" class="btn btn-primary">
+                        <a href="{{ url_for('admin_add_student') }}" class="btn btn-primary mr-2">
+                            <i class="fas fa-user-plus"></i> Add Student
+                        </a>
+                        <a href="{{ url_for('admin.index') }}" class="btn btn-info">
                             <i class="fas fa-upload"></i> Bulk Upload Students
                         </a>
                     </div>
@@ -178,11 +207,46 @@
     </div>
 </div>
 
+<!-- Delete Student Confirmation Modal -->
+<div class="modal fade" id="deleteModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Delete Student</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to permanently delete this student?</p>
+                <div class="alert alert-danger">
+                    <strong>Student:</strong> <span id="deleteStudentName"></span>
+                </div>
+                <p class="text-danger"><strong>Warning:</strong> This action cannot be undone. All data associated with this student will be lost.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                <form id="deleteForm" method="POST" class="d-inline">
+                    <button type="submit" class="btn btn-danger">
+                        <i class="fas fa-trash"></i> Delete Student
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
 function confirmReset(studentName, studentId) {
     document.getElementById('resetStudentName').textContent = studentName;
-    document.getElementById('resetForm').action = "{{ url_for('admin_reset_student_score', user_id='PLACEHOLDER') }}".replace('PLACEHOLDER', studentId);
+    document.getElementById('resetForm').action = "{{ url_for('admin_reset_student_score', user_id=0) }}".replace('/0', '/' + studentId);
     $('#resetModal').modal('show');
+}
+
+function confirmDelete(studentName, studentId) {
+    document.getElementById('deleteStudentName').textContent = studentName;
+    document.getElementById('deleteForm').action = "{{ url_for('admin_delete_student', user_id=0) }}".replace('/0', '/' + studentId);
+    $('#deleteModal').modal('show');
 }
 </script>
 

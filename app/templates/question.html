@@ -1,46 +1,238 @@
 {% extends 'base.html' %}
 
-
 {% block content %}
-    <div class="ques-div">
-        <form id="question-form" method="post" novalidate>
-            <h2 class="qnum">Question {{q.q_id}}</h2>
-            <div class="dotted-spaced"></div>
-            <div>
-                Time remaining: <span id="time-remaining"></span>
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-md-10 col-lg-8">
+            <!-- Timer Alert -->
+            <div class="alert alert-info mb-4" id="timer-alert">
+                <div class="row align-items-center">
+                    <div class="col">
+                        <h5 class="mb-0">
+                            <i class="fas fa-clock"></i> Time Remaining: 
+                            <span id="time-remaining" class="font-weight-bold"></span>
+                        </h5>
+                    </div>
+                    <div class="col-auto">
+                        <small class="text-muted">Question {{ q.q_id }} • Server-Side Timer Active</small>
+                    </div>
+                </div>
             </div>
-            <hr>
-            <h1 class="ques-heading">{{q.ques}}</h1>
-            <div class="options-div">
-                {{ form.options(class="list-unstyled") }}
+
+            <!-- Question Card -->
+            <div class="card shadow-sm">
+                <div class="card-header bg-primary text-white">
+                    <div class="row align-items-center">
+                        <div class="col">
+                            <h4 class="mb-0">Question {{ q.q_id }}</h4>
+                        </div>
+                        <div class="col-auto">
+                            <span class="badge badge-light">{{ current_question }} of {{ total_questions }}</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card-body">
+                    <form id="question-form" method="post" novalidate>
+                        <h3 class="ques-heading mb-4">{{ q.ques }}</h3>
+                        
+                        <div class="options-div mb-4">
+                            {{ form.options(class="list-unstyled") }}
+                        </div>
+                        
+                        <div class="text-center">
+                            {{ form.submit(class="btn btn-success btn-lg px-5", id="submit-btn") }}
+                        </div>
+                    </form>
+                </div>
+                
+                <div class="card-footer text-muted text-center">
+                    <small>
+                        <i class="fas fa-shield-alt"></i> 
+                        Anti-cheat protection active • Timer enforced server-side
+                    </small>
+                </div>
             </div>
-            {{ form.submit(class="btn btn-primary btn-lg sub-btn") }}
-        </form>
-        <!-- <span class="check-circle">
-            <i class="fas fa-check-circle"></i>
-        </span> -->
+        </div>
     </div>
+</div>
 
-    <script>
-      (function() {
-        var limit = {{ q.time_limit|default(60) }};
-        var remaining = limit;
-        var el = document.getElementById('time-remaining');
-        var form = document.getElementById('question-form');
+<style>
+.ques-heading {
+    color: #2c3e50;
+    line-height: 1.4;
+}
 
-        function tick() {
-          var m = Math.floor(remaining / 60);
-          var s = remaining % 60;
-          el.textContent = m + ':' + (s < 10 ? '0' + s : s);
-          if (remaining <= 0) {
-            try { form.submit(); } catch(e) {}
-            return;
-          }
-          remaining -= 1;
-          setTimeout(tick, 1000);
+.options-div .form-check {
+    margin-bottom: 15px;
+    padding: 15px;
+    border: 2px solid #e9ecef;
+    border-radius: 8px;
+    transition: all 0.2s;
+}
+
+.options-div .form-check:hover {
+    border-color: #007bff;
+    background-color: #f8f9fa;
+}
+
+.options-div .form-check-input:checked + .form-check-label {
+    font-weight: bold;
+    color: #007bff;
+}
+
+.options-div .form-check-input:checked {
+    background-color: #007bff;
+    border-color: #007bff;
+}
+
+.card {
+    border: none;
+    border-radius: 15px;
+}
+
+.card-header {
+    border-radius: 15px 15px 0 0 !important;
+}
+
+.card-footer {
+    border-radius: 0 0 15px 15px !important;
+}
+
+#timer-alert.alert-danger {
+    animation: pulse 1s infinite;
+}
+
+@keyframes pulse {
+    0% { opacity: 1; }
+    50% { opacity: 0.7; }
+    100% { opacity: 1; }
+}
+
+.btn-success {
+    background: linear-gradient(45deg, #28a745, #20c997);
+    border: none;
+    border-radius: 10px;
+    font-weight: 600;
+    transition: all 0.3s ease;
+}
+
+.btn-success:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(40, 167, 69, 0.4);
+}
+
+@media (max-width: 768px) {
+    .card-body {
+        padding: 1.5rem;
+    }
+    
+    .ques-heading {
+        font-size: 1.5rem;
+    }
+    
+    .options-div .form-check {
+        padding: 12px;
+        margin-bottom: 12px;
+    }
+}
+</style>
+
+<script>
+(function() {
+    // Use server-calculated remaining time for enhanced security
+    var remaining = {{ remaining_time|default(60) }};
+    var timeTaken = {{ time_taken|default(0) }};
+    var el = document.getElementById('time-remaining');
+    var form = document.getElementById('question-form');
+    var timerAlert = document.getElementById('timer-alert');
+    var submitBtn = document.getElementById('submit-btn');
+    
+    // Prevent going back to restart timer
+    history.pushState(null, null, location.href);
+    window.onpopstate = function() {
+        history.go(1);
+    };
+    
+    // Prevent right-click and certain keyboard shortcuts
+    document.addEventListener('contextmenu', function(e) {
+        e.preventDefault();
+    });
+    
+    document.addEventListener('keydown', function(e) {
+        // Disable F12, Ctrl+Shift+I, Ctrl+Shift+J, Ctrl+U
+        if (e.keyCode == 123 || 
+            (e.ctrlKey && e.shiftKey && e.keyCode == 73) ||
+            (e.ctrlKey && e.shiftKey && e.keyCode == 74) ||
+            (e.ctrlKey && e.keyCode == 85)) {
+            e.preventDefault();
         }
-        tick();
-      })();
-    </script>
+    });
+    
+    // Auto-submit when time is up
+    function tick() {
+        var m = Math.floor(remaining / 60);
+        var s = remaining % 60;
+        el.textContent = m + ':' + (s < 10 ? '0' + s : s);
+        
+        // Change appearance based on remaining time
+        if (remaining <= 0) {
+            el.textContent = 'TIME UP!';
+            el.style.color = '#dc3545';
+            timerAlert.className = 'alert alert-danger mb-4';
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<i class="fas fa-clock"></i> Time Expired';
+            
+            // Auto-submit immediately
+            setTimeout(function() {
+                form.submit();
+            }, 500);
+            return;
+        } else if (remaining <= 10) {
+            el.style.color = '#dc3545';
+            timerAlert.className = 'alert alert-danger mb-4';
+        } else if (remaining <= 30) {
+            el.style.color = '#fd7e14';
+            timerAlert.className = 'alert alert-warning mb-4';
+        } else if (remaining <= 60) {
+            el.style.color = '#ffc107';
+            timerAlert.className = 'alert alert-warning mb-4';
+        }
+        
+        remaining -= 1;
+        setTimeout(tick, 1000);
+    }
+    
+    // Prevent form submission spam
+    var submitted = false;
+    form.addEventListener('submit', function(e) {
+        if (submitted) {
+            e.preventDefault();
+            return false;
+        }
+        
+        submitted = true;
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Submitting...';
+    });
+    
+    // Warning before leaving page
+    window.addEventListener('beforeunload', function(e) {
+        if (!submitted && remaining > 0) {
+            e.preventDefault();
+            e.returnValue = 'Are you sure you want to leave? Your progress will be lost.';
+        }
+    });
+    
+    // Start the timer
+    tick();
+    
+    // Focus on first option for accessibility
+    var firstOption = document.querySelector('input[type="radio"]');
+    if (firstOption) {
+        firstOption.focus();
+    }
+})();
+</script>
 
 {% endblock %}

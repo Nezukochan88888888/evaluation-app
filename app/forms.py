@@ -38,6 +38,7 @@ class AdminQuestionForm(FlaskForm):
     c = StringField('Option C', validators=[DataRequired()])
     d = StringField('Option D', validators=[DataRequired()])
     ans = SelectField('Correct Answer', validators=[DataRequired()], choices=[])
+    quiz_category = StringField('Quiz Category', validators=[DataRequired()], default='General')
     time_limit = IntegerField('Time Limit (seconds)', validators=[DataRequired(), NumberRange(min=10, max=600)], default=60)
     submit = SubmitField('Save Question')
 
