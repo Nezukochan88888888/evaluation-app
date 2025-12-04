@@ -3,9 +3,12 @@
 
 {% block content %}
     <div class="ques-div">
-        <form method="post" novalidate>
+        <form id="question-form" method="post" novalidate>
             <h2 class="qnum">Question {{q.q_id}}</h2>
             <div class="dotted-spaced"></div>
+            <div>
+                Time remaining: <span id="time-remaining"></span>
+            </div>
             <hr>
             <h1 class="ques-heading">{{q.ques}}</h1>
             <div class="options-div">
@@ -18,5 +21,26 @@
         </span> -->
     </div>
 
-{% endblock %}
+    <script>
+      (function() {
+        var limit = {{ q.time_limit|default(60) }};
+        var remaining = limit;
+        var el = document.getElementById('time-remaining');
+        var form = document.getElementById('question-form');
 
+        function tick() {
+          var m = Math.floor(remaining / 60);
+          var s = remaining % 60;
+          el.textContent = m + ':' + (s < 10 ? '0' + s : s);
+          if (remaining <= 0) {
+            try { form.submit(); } catch(e) {}
+            return;
+          }
+          remaining -= 1;
+          setTimeout(tick, 1000);
+        }
+        tick();
+      })();
+    </script>
+
+{% endblock %}

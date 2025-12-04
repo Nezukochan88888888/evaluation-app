@@ -4,15 +4,47 @@
     <div class="home-div">
         <img src="{{ url_for('static', filename='images/home.jpg') }}" class="home-img">
         <div class="info-div">
-            {% if g.user %}
-                <h1>Welcome {{ g.user.username.capitalize() }}, </h1>
-            {% else %}
-                <h1>Sign In, Guest </h1>
+            
+            {% if not current_user.is_authenticated %}
+                <!-- Guest View -->
+                <h1>Welcome to Quiz System</h1>
+                <h4>Interactive quiz platform for students and teachers</h4>
+                <p>Get started by creating an account or logging in to take quizzes!</p>
+                <div>
+                    <a href="{{ url_for('register') }}" class="btn btn-success mr-2">Register Now</a>
+                    <a href="{{ url_for('login') }}" class="btn btn-primary">Login</a>
+                </div>
+
+            {% elif is_admin_view %}
+                <!-- Admin View -->
+                <h1>Welcome, Admin {{ current_user.username.capitalize() }}!</h1>
+                <h4>Manage your quiz system</h4>
+                <p>📊 {{ question_count }} questions | 👥 {{ student_count }} students</p>
+                <div>
+                    <a href="{{ url_for('admin_dashboard') }}" class="btn btn-primary mr-2">Dashboard</a>
+                    <a href="{{ url_for('admin_add_question') }}" class="btn btn-success">Add Question</a>
+                </div>
+
+            {% elif is_student_view %}
+                <!-- Student View -->
+                <h1>Welcome {{ current_user.username.capitalize() }}!</h1>
+                {% if has_taken_quiz %}
+                    <h4>🎉 Quiz Completed!</h4>
+                    <p>Your score: <strong>{{ user_score }} points</strong> | Rank: <strong>#{{ rank }}</strong></p>
+                    <div>
+                        <a href="{{ url_for('retake') }}" class="btn btn-warning mr-2">Retake Quiz</a>
+                        <a href="{{ url_for('leaderboard') }}" class="btn btn-info">Leaderboard</a>
+                    </div>
+                {% else %}
+                    <h4>Ready to test your knowledge?</h4>
+                    <p>{{ question_count }} questions waiting for you!</p>
+                    <div>
+                        <a href="{{ url_for('start_quiz') }}" class="btn btn-success mr-2">Start Quiz</a>
+                        <a href="{{ url_for('leaderboard') }}" class="btn btn-info">View Leaderboard</a>
+                    </div>
+                {% endif %}
             {% endif %}
-            <h4> Explore the Test Preparation 
-                exclusively made for you!
-            </h4>
-            <a href="{{ url_for('question', id=1)}}">Take the test</a>
+            
         </div>
     </div>
 {% endblock %}

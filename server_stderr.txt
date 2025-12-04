@@ -1,0 +1,359 @@
+WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
+ * Running on http://127.0.0.1:5000
+Press CTRL+C to quit
+ * Restarting with stat
+ * Debugger is active!
+ * Debugger PIN: 932-967-842
+127.0.0.1 - - [03/Dec/2025 20:25:45] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [03/Dec/2025 20:25:45] "GET /static/css/mob-styles.css HTTP/1.1" 200 -
+127.0.0.1 - - [03/Dec/2025 20:25:45] "GET /static/css/styles.css HTTP/1.1" 200 -
+127.0.0.1 - - [03/Dec/2025 20:25:45] "GET /static/images/home.jpg HTTP/1.1" 200 -
+127.0.0.1 - - [03/Dec/2025 20:25:46] "GET /favicon.ico HTTP/1.1" 404 -
+127.0.0.1 - - [03/Dec/2025 20:25:52] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [03/Dec/2025 20:25:52] "GET /static/css/styles.css HTTP/1.1" 304 -
+127.0.0.1 - - [03/Dec/2025 20:25:52] "GET /static/images/home.jpg HTTP/1.1" 304 -
+127.0.0.1 - - [03/Dec/2025 20:25:52] "GET /static/css/mob-styles.css HTTP/1.1" 304 -
+127.0.0.1 - - [03/Dec/2025 20:25:54] "GET /question/1 HTTP/1.1" 500 -
+Traceback (most recent call last):
+  File "C:\Users\Shishou143\flask-quiz-app\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1967, in _exec_single_context
+    self.dialect.do_execute(
+    ^
+  File "C:\Users\Shishou143\flask-quiz-app\.venv\Lib\site-packages\sqlalchemy\engine\default.py", line 951, in do_execute
+    cursor.execute(statement, parameters)
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+sqlite3.OperationalError: no such table: questions
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\Shishou143\flask-quiz-app\.venv\Lib\site-packages\flask\app.py", line 1478, in __call__
+    return self.wsgi_app(environ, start_response)
+           ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Shishou143\flask-quiz-app\.venv\Lib\site-packages\flask\app.py", line 1458, in wsgi_app
+    response = self.handle_exception(e)
+  File "C:\Users\Shishou143\flask-quiz-app\.venv\Lib\site-packages\flask\app.py", line 1455, in wsgi_app
+    response = self.full_dispatch_request()
+  File "C:\Users\Shishou143\flask-quiz-app\.venv\Lib\site-packages\flask\app.py", line 869, in full_dispatch_request
+    rv = self.handle_user_exception(e)
+  File "C:\Users\Shishou143\flask-quiz-app\.venv\Lib\site-packages\flask\app.py", line 867, in full_dispatch_request
+    rv = self.dispatch_request()
+  File "C:\Users\Shishou143\flask-quiz-app\.venv\Lib\site-packages\flask\app.py", line 852, in dispatch_request
+    return self.ensure_sync(self.view_functions[rule.endpoint])(**view_args)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+  File "C:\Users\Shishou143\flask-quiz-app\flask-quiz-app\app\routes.py", line 59, in question
+    q = Questions.query.filter_by(q_id=id).first()
+  File "C:\Users\Shishou143\flask-quiz-app\.venv\Lib\site-packages\sqlalchemy\orm\query.py", line 2759, in first
+    return self.limit(1)._iter().first()  # type: ignore
+           ~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\Shishou143\flask-quiz-app\.venv\Lib\site-packages\sqlalchemy\orm\query.py", line 2857, in _iter
+    result: Union[ScalarResult[_T], Result[_T]] = self.session.execute(
+    
+  File "C:\Users\Shishou143\flask-quiz-app\.venv\Lib\site-packages\sqlalchemy\orm\session.py", line 2351, in execute
+    return self._execute_internal(
+    
+  File "C:\Users\Shishou143\flask-quiz-app\.venv\Lib\site-packages\sqlalchemy\orm\session.py", line 2249, in _execute_internal
+    result: Result[Any] = compile_state_cls.orm_execute_statement(
+    
+  File "C:\Users\Shishou143\flask-quiz-app\.venv\Lib\site-packages\sqlalchemy\orm\context.py", line 306, in orm_execute_statement
+    result = conn.execute(
+    
+  File "C:\Users\Shishou143\flask-quiz-app\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1419, in execute
+    return meth(
+    
+  File "C:\Users\Shishou143\flask-quiz-app\.venv\Lib\site-packages\sqlalchemy\sql\elements.py", line 526, in _execute_on_connection
+    return connection._execute_clauseelement(
+    
+  File "C:\Users\Shishou143\flask-quiz-app\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1641, in _execute_clauseelement
+    ret = self._execute_context(
+    
+  File "C:\Users\Shishou143\flask-quiz-app\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1846, in _execute_context
+    return self._exec_single_context(
+    
+  File "C:\Users\Shishou143\flask-quiz-app\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1986, in _exec_single_context
+    self._handle_dbapi_exception(
+    ^
+  File "C:\Users\Shishou143\flask-quiz-app\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 2355, in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+  File "C:\Users\Shishou143\flask-quiz-app\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1967, in _exec_single_context
+    self.dialect.do_execute(
+    ^
+  File "C:\Users\Shishou143\flask-quiz-app\.venv\Lib\site-packages\sqlalchemy\engine\default.py", line 951, in do_execute
+    cursor.execute(statement, parameters)
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+sqlalchemy.exc.OperationalError: (sqlite3.OperationalError) no such table: questions
+[SQL: SELECT questions.q_id AS questions_q_id, questions.ques AS questions_ques, questions.a AS questions_a, questions.b AS questions_b, questions.c AS questions_c, questions.d AS questions_d, questions.ans AS questions_ans 
+FROM questions 
+WHERE questions.q_id = ?
+ LIMIT ? OFFSET ?]
+[parameters: (1, 1, 0)]
+(Background on this error at: https://sqlalche.me/e/20/e3q8)
+127.0.0.1 - - [03/Dec/2025 20:25:54] "GET /question/1?__debugger__=yes&cmd=resource&f=style.css HTTP/1.1" 200 -
+127.0.0.1 - - [03/Dec/2025 20:25:54] "GET /question/1?__debugger__=yes&cmd=resource&f=debugger.js HTTP/1.1" 200 -
+127.0.0.1 - - [03/Dec/2025 20:25:54] "GET /question/1?__debugger__=yes&cmd=resource&f=console.png HTTP/1.1" 200 -
+127.0.0.1 - - [03/Dec/2025 20:25:54] "GET /question/1?__debugger__=yes&cmd=resource&f=console.png HTTP/1.1" 304 -
+127.0.0.1 - - [03/Dec/2025 20:25:59] "GET /login HTTP/1.1" 200 -
+127.0.0.1 - - [03/Dec/2025 20:25:59] "GET /static/css/styles.css HTTP/1.1" 304 -
+127.0.0.1 - - [03/Dec/2025 20:25:59] "GET /static/css/mob-styles.css HTTP/1.1" 304 -
+127.0.0.1 - - [03/Dec/2025 20:25:59] "GET /static/images/boy-with-glasses.jpg HTTP/1.1" 200 -
+127.0.0.1 - - [03/Dec/2025 20:26:03] "GET /register HTTP/1.1" 200 -
+127.0.0.1 - - [03/Dec/2025 20:26:03] "GET /static/images/kids-studying-from-home.gif HTTP/1.1" 200 -
+127.0.0.1 - - [03/Dec/2025 20:26:03] "GET /static/css/styles.css HTTP/1.1" 304 -
+127.0.0.1 - - [03/Dec/2025 20:26:03] "GET /static/css/mob-styles.css HTTP/1.1" 304 -
+127.0.0.1 - - [03/Dec/2025 20:26:23] "POST /register HTTP/1.1" 500 -
+Traceback (most recent call last):
+  File "C:\Users\Shishou143\flask-quiz-app\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1967, in _exec_single_context
+    self.dialect.do_execute(
+    ^
+  File "C:\Users\Shishou143\flask-quiz-app\.venv\Lib\site-packages\sqlalchemy\engine\default.py", line 951, in do_execute
+    cursor.execute(statement, parameters)
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+sqlite3.OperationalError: no such table: user
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\Shishou143\flask-quiz-app\.venv\Lib\site-packages\flask\app.py", line 1478, in __call__
+    return self.wsgi_app(environ, start_response)
+           ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Shishou143\flask-quiz-app\.venv\Lib\site-packages\flask\app.py", line 1458, in wsgi_app
+    response = self.handle_exception(e)
+  File "C:\Users\Shishou143\flask-quiz-app\.venv\Lib\site-packages\flask\app.py", line 1455, in wsgi_app
+    response = self.full_dispatch_request()
+  File "C:\Users\Shishou143\flask-quiz-app\.venv\Lib\site-packages\flask\app.py", line 869, in full_dispatch_request
+    rv = self.handle_user_exception(e)
+  File "C:\Users\Shishou143\flask-quiz-app\.venv\Lib\site-packages\flask\app.py", line 867, in full_dispatch_request
+    rv = self.dispatch_request()
+  File "C:\Users\Shishou143\flask-quiz-app\.venv\Lib\site-packages\flask\app.py", line 852, in dispatch_request
+    return self.ensure_sync(self.view_functions[rule.endpoint])(**view_args)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+  File "C:\Users\Shishou143\flask-quiz-app\flask-quiz-app\app\routes.py", line 42, in register
+    if form.validate_on_submit():
+       ~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\Shishou143\flask-quiz-app\.venv\Lib\site-packages\flask_wtf\form.py", line 86, in validate_on_submit
+    return self.is_submitted() and self.validate(extra_validators=extra_validators)
+                                   ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Shishou143\flask-quiz-app\.venv\Lib\site-packages\wtforms\form.py", line 329, in validate
+    return super().validate(extra)
+           ~~~~~~~~~~~~~~~~^^^^^^^
+  File "C:\Users\Shishou143\flask-quiz-app\.venv\Lib\site-packages\wtforms\form.py", line 146, in validate
+    if not field.validate(self, extra):
+           ~~~~~~~~~~~~~~^^^^^^^^^^^^^
+  File "C:\Users\Shishou143\flask-quiz-app\.venv\Lib\site-packages\wtforms\fields\core.py", line 246, in validate
+    stop_validation = self._run_validation_chain(form, chain)
+  File "C:\Users\Shishou143\flask-quiz-app\.venv\Lib\site-packages\wtforms\fields\core.py", line 266, in _run_validation_chain
+    validator(form, self)
+    ~~~~~~~~~^^^^^^^^^^^^
+  File "C:\Users\Shishou143\flask-quiz-app\flask-quiz-app\app\forms.py", line 22, in validate_username
+    user = User.query.filter_by(username=username.data).first()
+  File "C:\Users\Shishou143\flask-quiz-app\.venv\Lib\site-packages\sqlalchemy\orm\query.py", line 2759, in first
+    return self.limit(1)._iter().first()  # type: ignore
+           ~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\Shishou143\flask-quiz-app\.venv\Lib\site-packages\sqlalchemy\orm\query.py", line 2857, in _iter
+    result: Union[ScalarResult[_T], Result[_T]] = self.session.execute(
+    
+  File "C:\Users\Shishou143\flask-quiz-app\.venv\Lib\site-packages\sqlalchemy\orm\session.py", line 2351, in execute
+    return self._execute_internal(
+    
+  File "C:\Users\Shishou143\flask-quiz-app\.venv\Lib\site-packages\sqlalchemy\orm\session.py", line 2249, in _execute_internal
+    result: Result[Any] = compile_state_cls.orm_execute_statement(
+    
+  File "C:\Users\Shishou143\flask-quiz-app\.venv\Lib\site-packages\sqlalchemy\orm\context.py", line 306, in orm_execute_statement
+    result = conn.execute(
+    
+  File "C:\Users\Shishou143\flask-quiz-app\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1419, in execute
+    return meth(
+    
+  File "C:\Users\Shishou143\flask-quiz-app\.venv\Lib\site-packages\sqlalchemy\sql\elements.py", line 526, in _execute_on_connection
+    return connection._execute_clauseelement(
+    
+  File "C:\Users\Shishou143\flask-quiz-app\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1641, in _execute_clauseelement
+    ret = self._execute_context(
+    
+  File "C:\Users\Shishou143\flask-quiz-app\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1846, in _execute_context
+    return self._exec_single_context(
+    
+  File "C:\Users\Shishou143\flask-quiz-app\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1986, in _exec_single_context
+    self._handle_dbapi_exception(
+    ^
+  File "C:\Users\Shishou143\flask-quiz-app\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 2355, in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+  File "C:\Users\Shishou143\flask-quiz-app\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1967, in _exec_single_context
+    self.dialect.do_execute(
+    ^
+  File "C:\Users\Shishou143\flask-quiz-app\.venv\Lib\site-packages\sqlalchemy\engine\default.py", line 951, in do_execute
+    cursor.execute(statement, parameters)
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+sqlalchemy.exc.OperationalError: (sqlite3.OperationalError) no such table: user
+[SQL: SELECT user.id AS user_id, user.username AS user_username, user.email AS user_email, user.password_hash AS user_password_hash, user.marks AS user_marks 
+FROM user 
+WHERE user.username = ?
+ LIMIT ? OFFSET ?]
+[parameters: ('sweirdo154', 1, 0)]
+(Background on this error at: https://sqlalche.me/e/20/e3q8)
+127.0.0.1 - - [03/Dec/2025 20:26:23] "GET /register?__debugger__=yes&cmd=resource&f=style.css HTTP/1.1" 200 -
+127.0.0.1 - - [03/Dec/2025 20:26:23] "GET /register?__debugger__=yes&cmd=resource&f=debugger.js HTTP/1.1" 200 -
+127.0.0.1 - - [03/Dec/2025 20:26:23] "GET /register?__debugger__=yes&cmd=resource&f=console.png HTTP/1.1" 200 -
+127.0.0.1 - - [03/Dec/2025 20:26:23] "GET /register?__debugger__=yes&cmd=resource&f=console.png HTTP/1.1" 304 -
+127.0.0.1 - - [03/Dec/2025 20:26:41] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [03/Dec/2025 20:26:41] "GET /static/css/styles.css HTTP/1.1" 304 -
+127.0.0.1 - - [03/Dec/2025 20:26:41] "GET /static/css/mob-styles.css HTTP/1.1" 304 -
+127.0.0.1 - - [03/Dec/2025 20:26:41] "GET /static/images/home.jpg HTTP/1.1" 304 -
+127.0.0.1 - - [03/Dec/2025 20:26:42] "GET /question/1 HTTP/1.1" 500 -
+Traceback (most recent call last):
+  File "C:\Users\Shishou143\flask-quiz-app\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1967, in _exec_single_context
+    self.dialect.do_execute(
+    ^
+  File "C:\Users\Shishou143\flask-quiz-app\.venv\Lib\site-packages\sqlalchemy\engine\default.py", line 951, in do_execute
+    cursor.execute(statement, parameters)
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+sqlite3.OperationalError: no such table: questions
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\Shishou143\flask-quiz-app\.venv\Lib\site-packages\flask\app.py", line 1478, in __call__
+    return self.wsgi_app(environ, start_response)
+           ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Shishou143\flask-quiz-app\.venv\Lib\site-packages\flask\app.py", line 1458, in wsgi_app
+    response = self.handle_exception(e)
+  File "C:\Users\Shishou143\flask-quiz-app\.venv\Lib\site-packages\flask\app.py", line 1455, in wsgi_app
+    response = self.full_dispatch_request()
+  File "C:\Users\Shishou143\flask-quiz-app\.venv\Lib\site-packages\flask\app.py", line 869, in full_dispatch_request
+    rv = self.handle_user_exception(e)
+  File "C:\Users\Shishou143\flask-quiz-app\.venv\Lib\site-packages\flask\app.py", line 867, in full_dispatch_request
+    rv = self.dispatch_request()
+  File "C:\Users\Shishou143\flask-quiz-app\.venv\Lib\site-packages\flask\app.py", line 852, in dispatch_request
+    return self.ensure_sync(self.view_functions[rule.endpoint])(**view_args)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+  File "C:\Users\Shishou143\flask-quiz-app\flask-quiz-app\app\routes.py", line 59, in question
+    q = Questions.query.filter_by(q_id=id).first()
+  File "C:\Users\Shishou143\flask-quiz-app\.venv\Lib\site-packages\sqlalchemy\orm\query.py", line 2759, in first
+    return self.limit(1)._iter().first()  # type: ignore
+           ~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\Shishou143\flask-quiz-app\.venv\Lib\site-packages\sqlalchemy\orm\query.py", line 2857, in _iter
+    result: Union[ScalarResult[_T], Result[_T]] = self.session.execute(
+    
+  File "C:\Users\Shishou143\flask-quiz-app\.venv\Lib\site-packages\sqlalchemy\orm\session.py", line 2351, in execute
+    return self._execute_internal(
+    
+  File "C:\Users\Shishou143\flask-quiz-app\.venv\Lib\site-packages\sqlalchemy\orm\session.py", line 2249, in _execute_internal
+    result: Result[Any] = compile_state_cls.orm_execute_statement(
+    
+  File "C:\Users\Shishou143\flask-quiz-app\.venv\Lib\site-packages\sqlalchemy\orm\context.py", line 306, in orm_execute_statement
+    result = conn.execute(
+    
+  File "C:\Users\Shishou143\flask-quiz-app\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1419, in execute
+    return meth(
+    
+  File "C:\Users\Shishou143\flask-quiz-app\.venv\Lib\site-packages\sqlalchemy\sql\elements.py", line 526, in _execute_on_connection
+    return connection._execute_clauseelement(
+    
+  File "C:\Users\Shishou143\flask-quiz-app\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1641, in _execute_clauseelement
+    ret = self._execute_context(
+    
+  File "C:\Users\Shishou143\flask-quiz-app\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1846, in _execute_context
+    return self._exec_single_context(
+    
+  File "C:\Users\Shishou143\flask-quiz-app\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1986, in _exec_single_context
+    self._handle_dbapi_exception(
+    ^
+  File "C:\Users\Shishou143\flask-quiz-app\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 2355, in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+  File "C:\Users\Shishou143\flask-quiz-app\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1967, in _exec_single_context
+    self.dialect.do_execute(
+    ^
+  File "C:\Users\Shishou143\flask-quiz-app\.venv\Lib\site-packages\sqlalchemy\engine\default.py", line 951, in do_execute
+    cursor.execute(statement, parameters)
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+sqlalchemy.exc.OperationalError: (sqlite3.OperationalError) no such table: questions
+[SQL: SELECT questions.q_id AS questions_q_id, questions.ques AS questions_ques, questions.a AS questions_a, questions.b AS questions_b, questions.c AS questions_c, questions.d AS questions_d, questions.ans AS questions_ans 
+FROM questions 
+WHERE questions.q_id = ?
+ LIMIT ? OFFSET ?]
+[parameters: (1, 1, 0)]
+(Background on this error at: https://sqlalche.me/e/20/e3q8)
+127.0.0.1 - - [03/Dec/2025 20:26:42] "GET /question/1?__debugger__=yes&cmd=resource&f=style.css HTTP/1.1" 304 -
+127.0.0.1 - - [03/Dec/2025 20:26:42] "GET /question/1?__debugger__=yes&cmd=resource&f=debugger.js HTTP/1.1" 304 -
+127.0.0.1 - - [03/Dec/2025 20:26:42] "GET /question/1?__debugger__=yes&cmd=resource&f=console.png HTTP/1.1" 304 -
+127.0.0.1 - - [03/Dec/2025 20:27:56] "GET /login HTTP/1.1" 200 -
+127.0.0.1 - - [03/Dec/2025 20:27:56] "GET /static/css/mob-styles.css HTTP/1.1" 304 -
+127.0.0.1 - - [03/Dec/2025 20:27:56] "GET /static/images/boy-with-glasses.jpg HTTP/1.1" 304 -
+127.0.0.1 - - [03/Dec/2025 20:27:56] "GET /static/css/styles.css HTTP/1.1" 304 -
+127.0.0.1 - - [03/Dec/2025 20:28:07] "POST /login HTTP/1.1" 500 -
+Traceback (most recent call last):
+  File "C:\Users\Shishou143\flask-quiz-app\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1967, in _exec_single_context
+    self.dialect.do_execute(
+    ^
+  File "C:\Users\Shishou143\flask-quiz-app\.venv\Lib\site-packages\sqlalchemy\engine\default.py", line 951, in do_execute
+    cursor.execute(statement, parameters)
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+sqlite3.OperationalError: no such table: user
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\Shishou143\flask-quiz-app\.venv\Lib\site-packages\flask\app.py", line 1478, in __call__
+    return self.wsgi_app(environ, start_response)
+           ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Shishou143\flask-quiz-app\.venv\Lib\site-packages\flask\app.py", line 1458, in wsgi_app
+    response = self.handle_exception(e)
+  File "C:\Users\Shishou143\flask-quiz-app\.venv\Lib\site-packages\flask\app.py", line 1455, in wsgi_app
+    response = self.full_dispatch_request()
+  File "C:\Users\Shishou143\flask-quiz-app\.venv\Lib\site-packages\flask\app.py", line 869, in full_dispatch_request
+    rv = self.handle_user_exception(e)
+  File "C:\Users\Shishou143\flask-quiz-app\.venv\Lib\site-packages\flask\app.py", line 867, in full_dispatch_request
+    rv = self.dispatch_request()
+  File "C:\Users\Shishou143\flask-quiz-app\.venv\Lib\site-packages\flask\app.py", line 852, in dispatch_request
+    return self.ensure_sync(self.view_functions[rule.endpoint])(**view_args)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+  File "C:\Users\Shishou143\flask-quiz-app\flask-quiz-app\app\routes.py", line 25, in login
+    user = User.query.filter_by(username=form.username.data).first()
+  File "C:\Users\Shishou143\flask-quiz-app\.venv\Lib\site-packages\sqlalchemy\orm\query.py", line 2759, in first
+    return self.limit(1)._iter().first()  # type: ignore
+           ~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\Shishou143\flask-quiz-app\.venv\Lib\site-packages\sqlalchemy\orm\query.py", line 2857, in _iter
+    result: Union[ScalarResult[_T], Result[_T]] = self.session.execute(
+    
+  File "C:\Users\Shishou143\flask-quiz-app\.venv\Lib\site-packages\sqlalchemy\orm\session.py", line 2351, in execute
+    return self._execute_internal(
+    
+  File "C:\Users\Shishou143\flask-quiz-app\.venv\Lib\site-packages\sqlalchemy\orm\session.py", line 2249, in _execute_internal
+    result: Result[Any] = compile_state_cls.orm_execute_statement(
+    
+  File "C:\Users\Shishou143\flask-quiz-app\.venv\Lib\site-packages\sqlalchemy\orm\context.py", line 306, in orm_execute_statement
+    result = conn.execute(
+    
+  File "C:\Users\Shishou143\flask-quiz-app\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1419, in execute
+    return meth(
+    
+  File "C:\Users\Shishou143\flask-quiz-app\.venv\Lib\site-packages\sqlalchemy\sql\elements.py", line 526, in _execute_on_connection
+    return connection._execute_clauseelement(
+    
+  File "C:\Users\Shishou143\flask-quiz-app\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1641, in _execute_clauseelement
+    ret = self._execute_context(
+    
+  File "C:\Users\Shishou143\flask-quiz-app\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1846, in _execute_context
+    return self._exec_single_context(
+    
+  File "C:\Users\Shishou143\flask-quiz-app\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1986, in _exec_single_context
+    self._handle_dbapi_exception(
+    ^
+  File "C:\Users\Shishou143\flask-quiz-app\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 2355, in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+  File "C:\Users\Shishou143\flask-quiz-app\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1967, in _exec_single_context
+    self.dialect.do_execute(
+    ^
+  File "C:\Users\Shishou143\flask-quiz-app\.venv\Lib\site-packages\sqlalchemy\engine\default.py", line 951, in do_execute
+    cursor.execute(statement, parameters)
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+sqlalchemy.exc.OperationalError: (sqlite3.OperationalError) no such table: user
+[SQL: SELECT user.id AS user_id, user.username AS user_username, user.email AS user_email, user.password_hash AS user_password_hash, user.marks AS user_marks 
+FROM user 
+WHERE user.username = ?
+ LIMIT ? OFFSET ?]
+[parameters: ('sweirdo154', 1, 0)]
+(Background on this error at: https://sqlalche.me/e/20/e3q8)
+127.0.0.1 - - [03/Dec/2025 20:28:07] "GET /login?__debugger__=yes&cmd=resource&f=style.css HTTP/1.1" 200 -
+127.0.0.1 - - [03/Dec/2025 20:28:07] "GET /login?__debugger__=yes&cmd=resource&f=debugger.js HTTP/1.1" 200 -
+127.0.0.1 - - [03/Dec/2025 20:28:07] "GET /login?__debugger__=yes&cmd=resource&f=console.png HTTP/1.1" 200 -
+127.0.0.1 - - [03/Dec/2025 20:28:07] "GET /login?__debugger__=yes&cmd=resource&f=console.png HTTP/1.1" 304 -

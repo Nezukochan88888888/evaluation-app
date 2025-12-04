@@ -1,0 +1,208 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header">
+                    <h4 class="mb-0">
+                        <i class="fas fa-edit"></i> Edit Question #{{ question.q_id }}
+                    </h4>
+                </div>
+                <div class="card-body">
+                    <form method="POST" id="questionForm">
+                        {{ form.hidden_tag() }}
+                        
+                        <!-- Question Text -->
+                        <div class="form-group">
+                            {{ form.ques.label(class="form-label font-weight-bold") }}
+                            {{ form.ques(class="form-control" + (" is-invalid" if form.ques.errors else "")) }}
+                            {% for error in form.ques.errors %}
+                                <div class="invalid-feedback">{{ error }}</div>
+                            {% endfor %}
+                        </div>
+
+                        <!-- Options A & B -->
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    {{ form.a.label(class="form-label font-weight-bold") }}
+                                    {{ form.a(class="form-control" + (" is-invalid" if form.a.errors else ""), onchange="updateAnswerChoices()") }}
+                                    {% for error in form.a.errors %}
+                                        <div class="invalid-feedback">{{ error }}</div>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    {{ form.b.label(class="form-label font-weight-bold") }}
+                                    {{ form.b(class="form-control" + (" is-invalid" if form.b.errors else ""), onchange="updateAnswerChoices()") }}
+                                    {% for error in form.b.errors %}
+                                        <div class="invalid-feedback">{{ error }}</div>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Options C & D -->
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    {{ form.c.label(class="form-label font-weight-bold") }}
+                                    {{ form.c(class="form-control" + (" is-invalid" if form.c.errors else ""), onchange="updateAnswerChoices()") }}
+                                    {% for error in form.c.errors %}
+                                        <div class="invalid-feedback">{{ error }}</div>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    {{ form.d.label(class="form-label font-weight-bold") }}
+                                    {{ form.d(class="form-control" + (" is-invalid" if form.d.errors else ""), onchange="updateAnswerChoices()") }}
+                                    {% for error in form.d.errors %}
+                                        <div class="invalid-feedback">{{ error }}</div>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Correct Answer & Time Limit -->
+                        <div class="row">
+                            <div class="col-md-8">
+                                <div class="form-group">
+                                    {{ form.ans.label(class="form-label font-weight-bold") }}
+                                    {{ form.ans(class="form-control" + (" is-invalid" if form.ans.errors else "")) }}
+                                    {% for error in form.ans.errors %}
+                                        <div class="invalid-feedback">{{ error }}</div>
+                                    {% endfor %}
+                                    <small class="form-text text-muted">Current correct answer: <strong>{{ question.ans }}</strong></small>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="form-group">
+                                    {{ form.time_limit.label(class="form-label font-weight-bold") }}
+                                    {{ form.time_limit(class="form-control" + (" is-invalid" if form.time_limit.errors else "")) }}
+                                    {% for error in form.time_limit.errors %}
+                                        <div class="invalid-feedback">{{ error }}</div>
+                                    {% endfor %}
+                                    <small class="form-text text-muted">10-600 seconds</small>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Submit Buttons -->
+                        <div class="form-group text-right">
+                            <a href="{{ url_for('admin_questions') }}" class="btn btn-secondary mr-2">
+                                <i class="fas fa-times"></i> Cancel
+                            </a>
+                            {{ form.submit(class="btn btn-primary") }}
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Preview Card -->
+            <div class="card mt-4" id="previewCard">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-eye"></i> Question Preview
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <h6 id="previewQuestion" class="font-weight-bold">{{ question.ques }}</h6>
+                    <div class="mt-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" disabled>
+                            <label class="form-check-label" id="previewA">A: {{ question.a }}</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" disabled>
+                            <label class="form-check-label" id="previewB">B: {{ question.b }}</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" disabled>
+                            <label class="form-check-label" id="previewC">C: {{ question.c }}</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" disabled>
+                            <label class="form-check-label" id="previewD">D: {{ question.d }}</label>
+                        </div>
+                    </div>
+                    <div class="mt-3">
+                        <small class="text-muted">
+                            <i class="fas fa-clock"></i> Time Limit: <span id="previewTime">{{ question.time_limit }}</span> seconds
+                        </small>
+                        <br>
+                        <small class="text-success">
+                            <i class="fas fa-check-circle"></i> Correct Answer: <strong>{{ question.ans }}</strong>
+                        </small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function updateAnswerChoices() {
+    const a = document.getElementById('a').value;
+    const b = document.getElementById('b').value;
+    const c = document.getElementById('c').value;
+    const d = document.getElementById('d').value;
+    const ansSelect = document.getElementById('ans');
+    const currentSelection = ansSelect.value;
+    
+    // Clear existing options
+    ansSelect.innerHTML = '<option value="">Select correct answer</option>';
+    
+    // Add options if they have values
+    if (a) {
+        const optionA = new Option(`A: ${a}`, a);
+        if (currentSelection === a) optionA.selected = true;
+        ansSelect.appendChild(optionA);
+    }
+    if (b) {
+        const optionB = new Option(`B: ${b}`, b);
+        if (currentSelection === b) optionB.selected = true;
+        ansSelect.appendChild(optionB);
+    }
+    if (c) {
+        const optionC = new Option(`C: ${c}`, c);
+        if (currentSelection === c) optionC.selected = true;
+        ansSelect.appendChild(optionC);
+    }
+    if (d) {
+        const optionD = new Option(`D: ${d}`, d);
+        if (currentSelection === d) optionD.selected = true;
+        ansSelect.appendChild(optionD);
+    }
+    
+    updatePreview();
+}
+
+function updatePreview() {
+    const question = document.getElementById('ques').value;
+    const a = document.getElementById('a').value;
+    const b = document.getElementById('b').value;
+    const c = document.getElementById('c').value;
+    const d = document.getElementById('d').value;
+    const timeLimit = document.getElementById('time_limit').value;
+    
+    if (question) document.getElementById('previewQuestion').textContent = question;
+    if (a) document.getElementById('previewA').textContent = `A: ${a}`;
+    if (b) document.getElementById('previewB').textContent = `B: ${b}`;
+    if (c) document.getElementById('previewC').textContent = `C: ${c}`;
+    if (d) document.getElementById('previewD').textContent = `D: ${d}`;
+    if (timeLimit) document.getElementById('previewTime').textContent = timeLimit;
+}
+
+// Add event listeners
+document.addEventListener('DOMContentLoaded', function() {
+    ['ques', 'a', 'b', 'c', 'd', 'time_limit'].forEach(function(id) {
+        document.getElementById(id).addEventListener('input', updatePreview);
+    });
+    updateAnswerChoices();
+});
+</script>
+{% endblock %}

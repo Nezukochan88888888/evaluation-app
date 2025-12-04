@@ -1,0 +1,15 @@
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+*.sqlite3
+*.db
+.env
+.venv
+.env.*
+.git
+.gitignore
+migrations/versions/__pycache__
+server_stdout.txt
+server_stderr.txt
+node_modules

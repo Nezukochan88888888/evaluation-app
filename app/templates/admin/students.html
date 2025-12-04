@@ -1,0 +1,195 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h1>Student Scores & Performance</h1>
+                <div>
+                    <a href="{{ url_for('bulk_upload.index') }}" class="btn btn-info mr-2">
+                        <i class="fas fa-upload"></i> Add Students
+                    </a>
+                    <a href="{{ url_for('leaderboard') }}" class="btn btn-success">
+                        <i class="fas fa-trophy"></i> Public Leaderboard
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {% if students %}
+        <div class="row">
+            <div class="col-12">
+                <!-- Summary Stats -->
+                <div class="row mb-4">
+                    <div class="col-md-3">
+                        <div class="card bg-primary text-white">
+                            <div class="card-body text-center">
+                                <h4>{{ students|length }}</h4>
+                                <p class="mb-0">Total Students</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card bg-success text-white">
+                            <div class="card-body text-center">
+                                <h4>{{ students|selectattr("marks")|list|length }}</h4>
+                                <p class="mb-0">Attempted Quiz</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card bg-info text-white">
+                            <div class="card-body text-center">
+                                <h4>{{ ((students|map(attribute='marks')|select|sum) / (students|selectattr("marks")|list|length or 1))|round(1) }}</h4>
+                                <p class="mb-0">Average Score</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card bg-warning text-white">
+                            <div class="card-body text-center">
+                                <h4>{{ students|map(attribute='marks')|select|max or 0 }}</h4>
+                                <p class="mb-0">Highest Score</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Students Table -->
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">All Students (Ranked by Score)</h5>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-hover mb-0">
+                                <thead class="thead-light">
+                                    <tr>
+                                        <th style="width: 80px;">Rank</th>
+                                        <th>Username</th>
+                                        <th>Email</th>
+                                        <th style="width: 120px;">Score</th>
+                                        <th style="width: 120px;">Status</th>
+                                        <th style="width: 150px;">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for student in students %}
+                                        <tr>
+                                            <td>
+                                                {% if loop.index <= 3 and student.marks and student.marks > 0 %}
+                                                    {% if loop.index == 1 %}
+                                                        <span class="badge badge-warning">🥇 #{{ loop.index }}</span>
+                                                    {% elif loop.index == 2 %}
+                                                        <span class="badge badge-secondary">🥈 #{{ loop.index }}</span>
+                                                    {% elif loop.index == 3 %}
+                                                        <span class="badge badge-dark">🥉 #{{ loop.index }}</span>
+                                                    {% endif %}
+                                                {% else %}
+                                                    <span class="badge badge-light">#{{ loop.index }}</span>
+                                                {% endif %}
+                                            </td>
+                                            <td>
+                                                <strong>{{ student.username }}</strong>
+                                            </td>
+                                            <td>
+                                                <small class="text-muted">{{ student.email }}</small>
+                                            </td>
+                                            <td>
+                                                {% if student.marks is not none and student.marks > 0 %}
+                                                    <span class="badge badge-success badge-lg">{{ student.marks }} pts</span>
+                                                {% else %}
+                                                    <span class="badge badge-light">No score</span>
+                                                {% endif %}
+                                            </td>
+                                            <td>
+                                                {% if student.marks is not none and student.marks > 0 %}
+                                                    <span class="badge badge-success">Completed</span>
+                                                {% else %}
+                                                    <span class="badge badge-warning">Not started</span>
+                                                {% endif %}
+                                            </td>
+                                            <td>
+                                                {% if student.marks is not none and student.marks > 0 %}
+                                                    <button type="button" class="btn btn-sm btn-outline-warning" 
+                                                            onclick="confirmReset('{{ student.username }}', {{ student.id }})" 
+                                                            title="Reset Score">
+                                                        <i class="fas fa-redo"></i>
+                                                    </button>
+                                                {% else %}
+                                                    <small class="text-muted">No actions</small>
+                                                {% endif %}
+                                            </td>
+                                        </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    {% else %}
+        <div class="row">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-body text-center py-5">
+                        <i class="fas fa-users fa-3x text-muted mb-3"></i>
+                        <h4 class="text-muted">No Students Registered</h4>
+                        <p class="text-muted">Students can register themselves, or you can add them using bulk upload.</p>
+                        <a href="{{ url_for('bulk_upload.index') }}" class="btn btn-primary">
+                            <i class="fas fa-upload"></i> Bulk Upload Students
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    {% endif %}
+</div>
+
+<!-- Reset Score Confirmation Modal -->
+<div class="modal fade" id="resetModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Reset Student Score</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to reset the score for student:</p>
+                <div class="alert alert-info">
+                    <strong>Student:</strong> <span id="resetStudentName"></span>
+                </div>
+                <p class="text-warning">This will allow them to retake the quiz from the beginning.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                <form id="resetForm" method="POST" class="d-inline">
+                    <button type="submit" class="btn btn-warning">
+                        <i class="fas fa-redo"></i> Reset Score
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function confirmReset(studentName, studentId) {
+    document.getElementById('resetStudentName').textContent = studentName;
+    document.getElementById('resetForm').action = "{{ url_for('admin_reset_student_score', user_id='PLACEHOLDER') }}".replace('PLACEHOLDER', studentId);
+    $('#resetModal').modal('show');
+}
+</script>
+
+<style>
+.badge-lg {
+    padding: 0.5rem 0.75rem;
+    font-size: 0.9rem;
+}
+</style>
+{% endblock %}

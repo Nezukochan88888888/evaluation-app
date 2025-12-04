@@ -7,6 +7,11 @@
                 <div class="login-intro">
                     <h1>Login to  <br> Quiz Buzz!</h1>
                     <p>Create any type of test, from easy <br> to complex.</p>
+                    <div class="mt-2">
+                        <small>
+                            Teacher/Admin? Use your admin credentials and then visit <a href="{{ url_for('admin.index') }}">Admin Panel</a>.
+                        </small>
+                    </div>
                 </div>
                 {{ form.hidden_tag() }}
                 <div class="form-para">
@@ -32,9 +37,7 @@
                 <div class="form-para">
                     <p>Forgot Password? {{ form.submit(class="btn btn-primary") }}</p>
                 </div>
-                <div class="form-para">
-                    <p>New User? <a href="{{ url_for('register') }}">Click to Register!</a></p>
-                </div>
+                <!-- Registration disabled for exam system -->
             </form>
         </div>
         <img src="{{ url_for('static', filename='images/boy-with-glasses.jpg') }}" class="login-img">

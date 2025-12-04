@@ -1,0 +1,160 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-12">
+            <h1 class="text-center mb-4">Admin Dashboard</h1>
+            <p class="text-center text-muted">Welcome, {{ current_user.username }}! Manage your quiz system from here.</p>
+        </div>
+    </div>
+
+    <!-- Stats Cards -->
+    <div class="row mb-4">
+        <div class="col-md-3 mb-3">
+            <div class="card bg-primary text-white">
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-8">
+                            <h4>{{ question_count }}</h4>
+                            <p class="mb-0">Questions</p>
+                        </div>
+                        <div class="col-4 text-right">
+                            <i class="fas fa-question-circle fa-2x"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-3 mb-3">
+            <div class="card bg-success text-white">
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-8">
+                            <h4>{{ student_count }}</h4>
+                            <p class="mb-0">Students</p>
+                        </div>
+                        <div class="col-4 text-right">
+                            <i class="fas fa-users fa-2x"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-3 mb-3">
+            <div class="card bg-info text-white">
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-8">
+                            <h4>{{ admin_count }}</h4>
+                            <p class="mb-0">Admins</p>
+                        </div>
+                        <div class="col-4 text-right">
+                            <i class="fas fa-user-cog fa-2x"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-3 mb-3">
+            <div class="card bg-warning text-white">
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-8">
+                            <h4>{{ top_students|length }}</h4>
+                            <p class="mb-0">Active</p>
+                        </div>
+                        <div class="col-4 text-right">
+                            <i class="fas fa-chart-line fa-2x"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Actions -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Quick Actions</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-3 mb-2">
+                            <a href="{{ url_for('admin_add_question') }}" class="btn btn-primary btn-block">
+                                <i class="fas fa-plus"></i> Add Question
+                            </a>
+                        </div>
+                        <div class="col-md-3 mb-2">
+                            <a href="{{ url_for('admin_questions') }}" class="btn btn-info btn-block">
+                                <i class="fas fa-list"></i> View Questions
+                            </a>
+                        </div>
+                        <div class="col-md-3 mb-2">
+                            <a href="{{ url_for('admin_students') }}" class="btn btn-success btn-block">
+                                <i class="fas fa-graduation-cap"></i> Student Scores
+                            </a>
+                        </div>
+                        <div class="col-md-3 mb-2">
+                            <a href="{{ url_for('bulk_upload.index') }}" class="btn btn-warning btn-block">
+                                <i class="fas fa-upload"></i> Bulk Upload
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Recent Questions & Top Students -->
+    <div class="row">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Recent Questions</h5>
+                </div>
+                <div class="card-body">
+                    {% if recent_questions %}
+                        {% for question in recent_questions %}
+                            <div class="border-bottom pb-2 mb-2">
+                                <strong>Q{{ question.q_id }}:</strong> {{ question.ques[:60] }}...
+                                <br>
+                                <small class="text-muted">Time: {{ question.time_limit }}s</small>
+                            </div>
+                        {% endfor %}
+                        <a href="{{ url_for('admin_questions') }}" class="btn btn-sm btn-outline-primary">View All</a>
+                    {% else %}
+                        <p class="text-muted">No questions available. <a href="{{ url_for('admin_add_question') }}">Add your first question</a></p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Top Students</h5>
+                </div>
+                <div class="card-body">
+                    {% if top_students %}
+                        {% for student in top_students %}
+                            <div class="d-flex justify-content-between border-bottom pb-2 mb-2">
+                                <span>{{ student.username }}</span>
+                                <span class="badge badge-success">{{ student.marks or 0 }} pts</span>
+                            </div>
+                        {% endfor %}
+                        <a href="{{ url_for('admin_students') }}" class="btn btn-sm btn-outline-success">View All</a>
+                    {% else %}
+                        <p class="text-muted">No student scores yet.</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

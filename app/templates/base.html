@@ -21,10 +21,24 @@
     <nav>
         <ul class="nav-links">
             <li> <a href="{{ url_for('home') }}"> Home </a> </li>
-            {% if not g.user %}
-            <li> <a href="{{ url_for('login') }}"> Login </a> </li>
+            
+            {% if not current_user.is_authenticated %}
+                <li> <a href="{{ url_for('login') }}"> Login </a> </li>
+                <li> <a href="{{ url_for('register') }}"> Register </a> </li>
             {% else %}
-            <li> <a href="{{ url_for('logout') }}"> Logout </a> </li>
+                {% if current_user.is_admin %}
+                    <!-- Admin Navigation -->
+                    <li> <a href="{{ url_for('admin_dashboard') }}"> Dashboard </a> </li>
+                    <li> <a href="{{ url_for('admin_questions') }}"> Manage Questions </a> </li>
+                    <li> <a href="{{ url_for('admin_students') }}"> Student Scores </a> </li>
+                    <li> <a href="{{ url_for('admin.index') }}"> Advanced Admin </a> </li>
+                {% else %}
+                    <!-- Student Navigation -->
+                    <li> <a href="{{ url_for('start_quiz') }}"> Take Quiz </a> </li>
+                    <li> <a href="{{ url_for('leaderboard') }}"> Leaderboard </a> </li>
+                    <li> <a href="{{ url_for('retake') }}"> Retake Quiz </a> </li>
+                {% endif %}
+                <li> <a href="{{ url_for('logout') }}"> Logout ({{ current_user.username }}) </a> </li>
             {% endif %}
         </ul>
     </nav>

@@ -1,0 +1,17 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container mt-4">
+  <h1>Leaderboard</h1>
+  {% if users and users|length > 0 %}
+  <ol>
+    {% for u in users %}
+      <li>{{ u.username }} — {{ u.marks or 0 }}</li>
+    {% endfor %}
+  </ol>
+  {% else %}
+  <p>No scores yet.</p>
+  {% endif %}
+  <p><a href="{{ url_for('home') }}">Back to Home</a></p>
+</div>
+{% endblock %}
