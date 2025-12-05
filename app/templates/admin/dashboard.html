@@ -9,66 +9,66 @@
         </div>
     </div>
 
-    <!-- Stats Cards -->
+    <!-- Stats Cards - Enhanced Responsive -->
     <div class="row mb-4">
-        <div class="col-md-3 mb-3">
-            <div class="card bg-primary text-white">
+        <div class="col-lg-3 col-md-6 col-sm-6 mb-3">
+            <div class="card bg-primary text-white h-100">
                 <div class="card-body">
-                    <div class="row">
-                        <div class="col-8">
-                            <h4>{{ question_count }}</h4>
-                            <p class="mb-0">Questions</p>
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h4 class="mb-1">{{ question_count }}</h4>
+                            <p class="mb-0 small">Questions</p>
                         </div>
-                        <div class="col-4 text-right">
-                            <i class="fas fa-question-circle fa-2x"></i>
+                        <div>
+                            <i class="fas fa-question-circle fa-2x opacity-75"></i>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
         
-        <div class="col-md-3 mb-3">
-            <div class="card bg-success text-white">
+        <div class="col-lg-3 col-md-6 col-sm-6 mb-3">
+            <div class="card bg-success text-white h-100">
                 <div class="card-body">
-                    <div class="row">
-                        <div class="col-8">
-                            <h4>{{ student_count }}</h4>
-                            <p class="mb-0">Students</p>
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h4 class="mb-1">{{ student_count }}</h4>
+                            <p class="mb-0 small">Students</p>
                         </div>
-                        <div class="col-4 text-right">
-                            <i class="fas fa-users fa-2x"></i>
+                        <div>
+                            <i class="fas fa-users fa-2x opacity-75"></i>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
         
-        <div class="col-md-3 mb-3">
-            <div class="card bg-info text-white">
+        <div class="col-lg-3 col-md-6 col-sm-6 mb-3">
+            <div class="card bg-info text-white h-100">
                 <div class="card-body">
-                    <div class="row">
-                        <div class="col-8">
-                            <h4>{{ admin_count }}</h4>
-                            <p class="mb-0">Admins</p>
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h4 class="mb-1">{{ admin_count }}</h4>
+                            <p class="mb-0 small">Admins</p>
                         </div>
-                        <div class="col-4 text-right">
-                            <i class="fas fa-user-cog fa-2x"></i>
+                        <div>
+                            <i class="fas fa-user-cog fa-2x opacity-75"></i>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
         
-        <div class="col-md-3 mb-3">
-            <div class="card bg-warning text-white">
+        <div class="col-lg-3 col-md-6 col-sm-6 mb-3">
+            <div class="card bg-warning text-white h-100">
                 <div class="card-body">
-                    <div class="row">
-                        <div class="col-8">
-                            <h4>{{ top_students|length }}</h4>
-                            <p class="mb-0">Active</p>
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h4 class="mb-1">{{ top_students|length }}</h4>
+                            <p class="mb-0 small">Active</p>
                         </div>
-                        <div class="col-4 text-right">
-                            <i class="fas fa-chart-line fa-2x"></i>
+                        <div>
+                            <i class="fas fa-chart-line fa-2x opacity-75"></i>
                         </div>
                     </div>
                 </div>
@@ -84,25 +84,37 @@
                     <h5 class="mb-0">Quick Actions</h5>
                 </div>
                 <div class="card-body">
-                    <div class="row">
-                        <div class="col-md-3 mb-2">
-                            <a href="{{ url_for('admin_add_question') }}" class="btn btn-primary btn-block">
+                    <div class="row g-2">
+                        <div class="col-lg-3 col-md-6 col-sm-6 mb-2">
+                            <a href="{{ url_for('admin_add_question') }}" class="btn btn-primary w-100">
                                 <i class="fas fa-plus"></i> Add Question
                             </a>
                         </div>
-                        <div class="col-md-3 mb-2">
-                            <a href="{{ url_for('admin_questions') }}" class="btn btn-info btn-block">
+                        <div class="col-lg-3 col-md-6 col-sm-6 mb-2">
+                            <a href="{{ url_for('admin_questions') }}" class="btn btn-info w-100">
                                 <i class="fas fa-list"></i> View Questions
                             </a>
                         </div>
-                        <div class="col-md-3 mb-2">
-                            <a href="{{ url_for('admin_students') }}" class="btn btn-success btn-block">
+                        <div class="col-lg-3 col-md-6 col-sm-6 mb-2">
+                            <a href="{{ url_for('admin_students') }}" class="btn btn-success w-100">
                                 <i class="fas fa-graduation-cap"></i> Student Scores
                             </a>
                         </div>
-                        <div class="col-md-3 mb-2">
-                            <a href="{{ url_for('admin_bulk_upload_questions') }}" class="btn btn-warning btn-block">
-                                <i class="fas fa-upload"></i> Bulk Questions
+                        <div class="col-lg-3 col-md-6 col-sm-6 mb-2">
+                            <a href="{{ url_for('admin_bulk_upload_questions') }}" class="btn btn-warning w-100">
+                                <i class="fas fa-upload"></i> Bulk Upload
+                            </a>
+                        </div>
+                    </div>
+                    <div class="row g-2 mt-1">
+                        <div class="col-md-6 mb-2">
+                            <a href="{{ url_for('admin_analytics') }}" class="btn btn-info w-100">
+                                <i class="fas fa-chart-bar"></i> Analytics & Reports
+                            </a>
+                        </div>
+                        <div class="col-md-6 mb-2">
+                            <a href="{{ url_for('home') }}" class="btn btn-outline-primary w-100">
+                                <i class="fas fa-home"></i> Back to Home
                             </a>
                         </div>
                     </div>

@@ -10,6 +10,21 @@
                     <i class="fas fa-plus"></i> Add New Question
                 </a>
             </div>
+            
+            <!-- Bulk Actions -->
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <form method="POST" action="{{ url_for('admin_delete_selected') }}" id="bulkDeleteForm" onsubmit="return confirmBulkDelete()">
+                    <button type="submit" class="btn btn-danger" id="deleteSelectedBtn" disabled>
+                        <i class="fas fa-trash"></i> Delete Selected (<span id="selectedCount">0</span>)
+                    </button>
+                </form>
+                <small class="text-muted">
+                    Total: {{ questions|length }} questions 
+                    (MCQ: {{ questions|selectattr('question_type', 'equalto', 'MCQ')|list|length + questions|rejectattr('question_type')|list|length }}, 
+                     T/F: {{ questions|selectattr('question_type', 'equalto', 'TF')|list|length }}, 
+                     Image: {{ questions|selectattr('question_type', 'equalto', 'Image')|list|length }})
+                </small>
+            </div>
         </div>
     </div>
 
@@ -25,10 +40,16 @@
                             <table class="table table-hover mb-0">
                                 <thead class="thead-light">
                                     <tr>
+                                        <th style="width: 50px;">
+                                            <input type="checkbox" id="selectAll" onchange="toggleSelectAll()">
+                                        </th>
                                         <th style="width: 60px;">ID</th>
+                                        <th style="width: 80px;">Type</th>
                                         <th>Question</th>
-                                        <th style="width: 120px;">Time Limit</th>
-                                        <th style="width: 150px;">Correct Answer</th>
+                                        <th style="width: 100px;">Category</th>
+                                        <th style="width: 80px;">Points</th>
+                                        <th style="width: 100px;">Time Limit</th>
+                                        <th style="width: 120px;">Correct Answer</th>
                                         <th style="width: 200px;">Actions</th>
                                     </tr>
                                 </thead>
@@ -36,18 +57,44 @@
                                     {% for question in questions %}
                                         <tr>
                                             <td>
+                                                <input type="checkbox" name="selected_questions" value="{{ question.q_id }}" class="question-checkbox">
+                                            </td>
+                                            <td>
                                                 <span class="badge badge-primary">{{ question.q_id }}</span>
                                             </td>
                                             <td>
-                                                <strong>{{ question.ques[:80] }}{% if question.ques|length > 80 %}...{% endif %}</strong>
-                                                <div class="small text-muted mt-1">
-                                                    <strong>A:</strong> {{ question.a[:30] }}{% if question.a|length > 30 %}...{% endif %} |
-                                                    <strong>B:</strong> {{ question.b[:30] }}{% if question.b|length > 30 %}...{% endif %}
+                                                {% if question.question_type == 'TF' %}
+                                                    <span class="badge badge-success">T/F</span>
+                                                {% elif question.question_type == 'Image' %}
+                                                    <span class="badge badge-info">IMG</span>
+                                                {% else %}
+                                                    <span class="badge badge-primary">MCQ</span>
+                                                {% endif %}
+                                            </td>
+                                            <td>
+                                                <div class="d-flex align-items-start">
+                                                    {% if question.image_file %}
+                                                        <img src="{{ url_for('static', filename='question_images/' + question.image_file) }}" 
+                                                             alt="Question Image" 
+                                                             class="img-thumbnail me-2" 
+                                                             style="width: 40px; height: 40px; object-fit: cover; margin-right: 10px;">
+                                                    {% endif %}
+                                                    <div>
+                                                        <strong>{{ question.ques[:80] }}{% if question.ques|length > 80 %}...{% endif %}</strong>
+                                                        <div class="small text-muted mt-1">
+                                                            <strong>A:</strong> {{ question.a[:30] }}{% if question.a|length > 30 %}...{% endif %} |
+                                                            <strong>B:</strong> {{ question.b[:30] }}{% if question.b|length > 30 %}...{% endif %}
+                                                            {% if question.c %} | <strong>C:</strong> {{ question.c[:30] }}{% if question.c|length > 30 %}...{% endif %}{% endif %}
+                                                            {% if question.d %} | <strong>D:</strong> {{ question.d[:30] }}{% if question.d|length > 30 %}...{% endif %}{% endif %}
+                                                        </div>
+                                                    </div>
                                                 </div>
-                                                <div class="small text-muted">
-                                                    <strong>C:</strong> {{ question.c[:30] }}{% if question.c|length > 30 %}...{% endif %} |
-                                                    <strong>D:</strong> {{ question.d[:30] }}{% if question.d|length > 30 %}...{% endif %}
-                                                </div>
+                                            </td>
+                                            <td>
+                                                <span class="badge badge-secondary">{{ question.category or question.quiz_category or 'General' }}</span>
+                                            </td>
+                                            <td>
+                                                <span class="badge badge-warning">{{ question.points or 1 }}pt</span>
                                             </td>
                                             <td>
                                                 <span class="badge badge-info">{{ question.time_limit }}s</span>
@@ -127,8 +174,62 @@
 <script>
 function confirmDelete(questionId, questionText) {
     document.getElementById('deleteQuestionText').textContent = questionText;
-    document.getElementById('deleteForm').action = "{{ url_for('admin_delete_question', q_id='PLACEHOLDER') }}".replace('PLACEHOLDER', questionId);
+    document.getElementById('deleteForm').action = "/admin_delete_question/" + questionId;
     $('#deleteModal').modal('show');
 }
+
+function toggleSelectAll() {
+    const selectAllCheckbox = document.getElementById('selectAll');
+    const questionCheckboxes = document.querySelectorAll('.question-checkbox');
+    
+    questionCheckboxes.forEach(checkbox => {
+        checkbox.checked = selectAllCheckbox.checked;
+    });
+    
+    updateSelectedCount();
+}
+
+function updateSelectedCount() {
+    const selectedCheckboxes = document.querySelectorAll('.question-checkbox:checked');
+    const count = selectedCheckboxes.length;
+    
+    document.getElementById('selectedCount').textContent = count;
+    document.getElementById('deleteSelectedBtn').disabled = count === 0;
+    
+    // Update select all checkbox state
+    const allCheckboxes = document.querySelectorAll('.question-checkbox');
+    const selectAllCheckbox = document.getElementById('selectAll');
+    
+    if (count === 0) {
+        selectAllCheckbox.indeterminate = false;
+        selectAllCheckbox.checked = false;
+    } else if (count === allCheckboxes.length) {
+        selectAllCheckbox.indeterminate = false;
+        selectAllCheckbox.checked = true;
+    } else {
+        selectAllCheckbox.indeterminate = true;
+    }
+}
+
+function confirmBulkDelete() {
+    const selectedCheckboxes = document.querySelectorAll('.question-checkbox:checked');
+    const count = selectedCheckboxes.length;
+    
+    if (count === 0) {
+        alert('Please select at least one question to delete.');
+        return false;
+    }
+    
+    return confirm(`Are you sure you want to delete ${count} selected question(s)? This action cannot be undone.`);
+}
+
+// Add event listeners to all question checkboxes
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('.question-checkbox').forEach(checkbox => {
+        checkbox.addEventListener('change', updateSelectedCount);
+    });
+    
+    updateSelectedCount(); // Initial count
+});
 </script>
 {% endblock %}

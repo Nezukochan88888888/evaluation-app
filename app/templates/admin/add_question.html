@@ -28,7 +28,7 @@
                             <div class="col-md-6">
                                 <div class="form-group">
                                     {{ form.a.label(class="form-label font-weight-bold") }}
-                                    {{ form.a(class="form-control" + (" is-invalid" if form.a.errors else ""), onchange="updateAnswerChoices()") }}
+                                    {{ form.a(class="form-control" + (" is-invalid" if form.a.errors else ""), id="optionA", onchange="updateAnswerChoices()") }}
                                     {% for error in form.a.errors %}
                                         <div class="invalid-feedback">{{ error }}</div>
                                     {% endfor %}
@@ -37,7 +37,7 @@
                             <div class="col-md-6">
                                 <div class="form-group">
                                     {{ form.b.label(class="form-label font-weight-bold") }}
-                                    {{ form.b(class="form-control" + (" is-invalid" if form.b.errors else ""), onchange="updateAnswerChoices()") }}
+                                    {{ form.b(class="form-control" + (" is-invalid" if form.b.errors else ""), id="optionB", onchange="updateAnswerChoices()") }}
                                     {% for error in form.b.errors %}
                                         <div class="invalid-feedback">{{ error }}</div>
                                     {% endfor %}
@@ -46,11 +46,11 @@
                         </div>
 
                         <!-- Options C & D -->
-                        <div class="row">
+                        <div class="row" id="optionsCDContainer">
                             <div class="col-md-6">
                                 <div class="form-group">
                                     {{ form.c.label(class="form-label font-weight-bold") }}
-                                    {{ form.c(class="form-control" + (" is-invalid" if form.c.errors else ""), onchange="updateAnswerChoices()") }}
+                                    {{ form.c(class="form-control" + (" is-invalid" if form.c.errors else ""), id="optionC", onchange="updateAnswerChoices()") }}
                                     {% for error in form.c.errors %}
                                         <div class="invalid-feedback">{{ error }}</div>
                                     {% endfor %}
@@ -59,12 +59,19 @@
                             <div class="col-md-6">
                                 <div class="form-group">
                                     {{ form.d.label(class="form-label font-weight-bold") }}
-                                    {{ form.d(class="form-control" + (" is-invalid" if form.d.errors else ""), onchange="updateAnswerChoices()") }}
+                                    {{ form.d(class="form-control" + (" is-invalid" if form.d.errors else ""), id="optionD", onchange="updateAnswerChoices()") }}
                                     {% for error in form.d.errors %}
                                         <div class="invalid-feedback">{{ error }}</div>
                                     {% endfor %}
                                 </div>
                             </div>
+                        </div>
+
+                        <!-- Image Upload Field -->
+                        <div class="form-group" id="imageUploadContainer" style="display: none;">
+                            {{ form.image.label(class="form-label font-weight-bold") }}
+                            {{ form.image(class="form-control-file") }}
+                            <small class="form-text text-muted">📷 Upload an image for image-based questions (JPG, PNG only)</small>
                         </div>
 
                         <!-- Correct Answer & Time Limit -->
@@ -89,6 +96,53 @@
                                     <small class="form-text text-muted">10-600 seconds</small>
                                 </div>
                             </div>
+                        </div>
+
+                        <!-- Module 1: Enhanced Educational Content Fields -->
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    {{ form.question_type.label(class="form-label font-weight-bold") }}
+                                    {{ form.question_type(class="form-control", id="questionType") }}
+                                    <small class="form-text text-muted">Select the type of question</small>
+                                </div>
+
+                                <div class="form-group">
+                                    {{ form.quiz_category.label(class="form-label font-weight-bold") }}
+                                    {{ form.quiz_category(class="form-control") }}
+                                    <small class="form-text text-muted">Quiz category for grouping</small>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    {{ form.points.label(class="form-label font-weight-bold") }}
+                                    {{ form.points(class="form-control") }}
+                                    <small class="form-text text-muted">Question weight (1-10 points)</small>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    {{ form.category.label(class="form-label font-weight-bold") }}
+                                    {{ form.category(class="form-control") }}
+                                    <small class="form-text text-muted">Subject category for analytics</small>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    {{ form.media_path.label(class="form-label font-weight-bold") }}
+                                    {{ form.media_path(class="form-control") }}
+                                    <small class="form-text text-muted">Optional image filename</small>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            {{ form.rationalization.label(class="form-label font-weight-bold") }}
+                            {{ form.rationalization(class="form-control") }}
+                            <small class="form-text text-muted">📚 Explanation shown for wrong answers (Module 2)</small>
                         </div>
 
                         <!-- Submit Buttons -->
@@ -193,11 +247,58 @@ function updatePreview() {
     }
 }
 
+// Question type handling
+function handleQuestionTypeChange() {
+    const questionType = document.getElementById('questionType').value;
+    const optionA = document.getElementById('optionA');
+    const optionB = document.getElementById('optionB');
+    const optionsCDContainer = document.getElementById('optionsCDContainer');
+    const imageUploadContainer = document.getElementById('imageUploadContainer');
+
+    if (questionType === 'TF') {
+        // True/False: Hide C and D options, auto-fill A and B
+        optionsCDContainer.style.display = 'none';
+        imageUploadContainer.style.display = 'none';
+        optionA.value = 'True';
+        optionB.value = 'False';
+        optionA.readOnly = true;
+        optionB.readOnly = true;
+    } else if (questionType === 'Image') {
+        // Image-based: Show all options and image upload
+        optionsCDContainer.style.display = 'block';
+        imageUploadContainer.style.display = 'block';
+        optionA.readOnly = false;
+        optionB.readOnly = false;
+        if (optionA.value === 'True') optionA.value = '';
+        if (optionB.value === 'False') optionB.value = '';
+    } else {
+        // Multiple Choice: Show all options, hide image upload
+        optionsCDContainer.style.display = 'block';
+        imageUploadContainer.style.display = 'none';
+        optionA.readOnly = false;
+        optionB.readOnly = false;
+        if (optionA.value === 'True') optionA.value = '';
+        if (optionB.value === 'False') optionB.value = '';
+    }
+    
+    updateAnswerChoices();
+    updatePreview();
+}
+
 // Add event listeners
 document.addEventListener('DOMContentLoaded', function() {
     ['ques', 'a', 'b', 'c', 'd', 'time_limit'].forEach(function(id) {
-        document.getElementById(id).addEventListener('input', updatePreview);
+        const element = document.getElementById(id);
+        if (element) element.addEventListener('input', updatePreview);
     });
+    
+    // Question type change handler
+    const questionTypeSelect = document.getElementById('questionType');
+    if (questionTypeSelect) {
+        questionTypeSelect.addEventListener('change', handleQuestionTypeChange);
+        handleQuestionTypeChange(); // Initialize on page load
+    }
+    
     updateAnswerChoices();
 });
 </script>

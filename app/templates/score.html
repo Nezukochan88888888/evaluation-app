@@ -11,7 +11,7 @@
             </div>
             <h1 class="score-head">Your Score</h1>
             <div class="score-circle">
-                <h1>{{ g.user.marks }}</h1>
+                <h1>{{ final_score or g.user.marks }}</h1>
             </div>
             <h1 class="congrats-cls">Congratulations! <i class="fas fa-glass-cheers"></i></h1>
             <div class="redirect-links">
@@ -19,5 +19,117 @@
                 <a href="{{ url_for('leaderboard') }}" class="btn btn-info">View Leaderboard</a>
             </div>
     </div>
-    <!-- <p>Your Final Score is {{ g.user.marks }}. Congratulations <3</p> -->
+
+    <!-- MODULE 4: Student Feedback - Review Wrong Answers -->
+    {% if missed_questions %}
+    <div class="container mt-5 mb-5">
+        <div class="row justify-content-center">
+            <div class="col-md-10">
+                <div class="card">
+                    <div class="card-header bg-warning text-dark">
+                        <h4 class="mb-0">
+                            <i class="fas fa-book-open"></i> Learning Review - Questions You Missed
+                        </h4>
+                        <p class="mb-0 mt-2">Study these explanations to improve your understanding</p>
+                    </div>
+                    <div class="card-body">
+                        {% for missed in missed_questions %}
+                        <div class="missed-question mb-4 p-3" style="border-left: 4px solid #ffc107; background-color: #fff9e6;">
+                            <h6 class="text-danger mb-3">
+                                <span class="badge badge-danger mr-2">Question {{ missed.q_id }}</span>
+                                {{ missed.ques }}
+                            </h6>
+                            
+                            <!-- Show all options with correct answer highlighted -->
+                            <div class="row mb-3">
+                                <div class="col-md-6">
+                                    <div class="answer-option p-2 {% if missed.ans == missed.a %}bg-success text-white{% else %}bg-light{% endif %} rounded mb-2">
+                                        <strong>A:</strong> {{ missed.a }}
+                                        {% if missed.ans == missed.a %}
+                                            <span class="badge badge-light ml-2">✓ Correct</span>
+                                        {% endif %}
+                                    </div>
+                                    <div class="answer-option p-2 {% if missed.ans == missed.b %}bg-success text-white{% else %}bg-light{% endif %} rounded mb-2">
+                                        <strong>B:</strong> {{ missed.b }}
+                                        {% if missed.ans == missed.b %}
+                                            <span class="badge badge-light ml-2">✓ Correct</span>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="answer-option p-2 {% if missed.ans == missed.c %}bg-success text-white{% else %}bg-light{% endif %} rounded mb-2">
+                                        <strong>C:</strong> {{ missed.c }}
+                                        {% if missed.ans == missed.c %}
+                                            <span class="badge badge-light ml-2">✓ Correct</span>
+                                        {% endif %}
+                                    </div>
+                                    <div class="answer-option p-2 {% if missed.ans == missed.d %}bg-success text-white{% else %}bg-light{% endif %} rounded mb-2">
+                                        <strong>D:</strong> {{ missed.d }}
+                                        {% if missed.ans == missed.d %}
+                                            <span class="badge badge-light ml-2">✓ Correct</span>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Show the rationalization/explanation -->
+                            {% if missed.rationalization %}
+                            <div class="explanation-box p-3 bg-info text-white rounded">
+                                <h6><i class="fas fa-lightbulb"></i> Why {{ missed.ans }} is correct:</h6>
+                                <p class="mb-0">{{ missed.rationalization }}</p>
+                            </div>
+                            {% else %}
+                            <div class="explanation-box p-3 bg-secondary text-white rounded">
+                                <h6><i class="fas fa-info-circle"></i> Correct Answer:</h6>
+                                <p class="mb-0">The correct answer is <strong>{{ missed.ans }}</strong>. No additional explanation available.</p>
+                            </div>
+                            {% endif %}
+
+                            <!-- Show question metadata if available -->
+                            <div class="mt-2">
+                                <small class="text-muted">
+                                    {% if missed.category %}
+                                        <i class="fas fa-tag"></i> Category: {{ missed.category }} |
+                                    {% endif %}
+                                    <i class="fas fa-star"></i> Points: {{ missed.points or 1 }}
+                                    {% if missed.media_path %}
+                                        | <i class="fas fa-image"></i> Has Image
+                                    {% endif %}
+                                </small>
+                            </div>
+                        </div>
+                        {% endfor %}
+                        
+                        <div class="text-center mt-4">
+                            <p class="text-success">
+                                <i class="fas fa-graduation-cap"></i>
+                                <strong>Remember:</strong> Learning from mistakes is the best way to improve! 
+                                Review these explanations to do better next time.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+<style>
+.score-main {
+    margin-bottom: 2rem;
+}
+.missed-question {
+    border-radius: 8px;
+}
+.answer-option {
+    transition: all 0.2s ease;
+}
+.explanation-box {
+    border-radius: 8px;
+    border: 2px solid #dee2e6;
+}
+.bg-success {
+    background-color: #28a745 !important;
+}
+</style>
 {% endblock %}

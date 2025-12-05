@@ -34,6 +34,16 @@
 
                 <div class="card-body">
                     <form id="question-form" method="post" novalidate>
+                        <!-- Display image if available for image-based questions -->
+                        {% if q.image_file %}
+                            <div class="question-image text-center mb-4">
+                                <img src="{{ url_for('static', filename='question_images/' + q.image_file) }}" 
+                                     alt="Question Image" 
+                                     class="img-fluid rounded shadow-sm"
+                                     style="max-height: 400px; max-width: 100%; border: 2px solid #dee2e6;">
+                            </div>
+                        {% endif %}
+                        
                         <h3 class="ques-heading mb-4">{{ q.ques }}</h3>
                         
                         <div class="options-div mb-4">

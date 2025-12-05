@@ -9,3 +9,8 @@ class Config(object):
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     QUES_PER_PAGE = 1
     WTF_CSRF_ENABLED = False  # Disable CSRF temporarily for quiz functionality
+    
+    # Fix for admin_questions Internal Server Error - URL building configuration
+    SERVER_NAME = None  # Let Flask auto-detect from request
+    APPLICATION_ROOT = '/'
+    PREFERRED_URL_SCHEME = 'http'

@@ -1,0 +1,212 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h1><i class="fas fa-chart-bar"></i> Quiz Analytics & Distractor Analysis</h1>
+                <a href="{{ url_for('admin_dashboard') }}" class="btn btn-secondary">
+                    <i class="fas fa-arrow-left"></i> Back to Dashboard
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Category Selection -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Select Quiz Category for Analysis</h5>
+                </div>
+                <div class="card-body">
+                    <form method="GET" action="{{ url_for('admin_analytics') }}">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <select name="category" class="form-control" onchange="this.form.submit()">
+                                    <option value="">All Categories</option>
+                                    {% for cat in categories %}
+                                        <option value="{{ cat }}" {% if cat == selected_category %}selected{% endif %}>
+                                            {{ cat }}
+                                        </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="text-muted">
+                                    <small>Selected: <strong>{{ selected_category or 'All Categories' }}</strong></small>
+                                </div>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Overall Statistics -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card bg-primary text-white">
+                <div class="card-body">
+                    <h4>{{ stats.total_students }}</h4>
+                    <p class="mb-0">Students Attempted</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-success text-white">
+                <div class="card-body">
+                    <h4>{{ stats.highest_score }}</h4>
+                    <p class="mb-0">Highest Score</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-warning text-white">
+                <div class="card-body">
+                    <h4>{{ stats.lowest_score }}</h4>
+                    <p class="mb-0">Lowest Score</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-info text-white">
+                <div class="card-body">
+                    <h4>{{ "%.1f"|format(stats.average_score) }}</h4>
+                    <p class="mb-0">Average Score</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Question-by-Question Analysis -->
+    {% if question_analytics %}
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Question-by-Question Distractor Analysis</h5>
+                    <small class="text-muted">Shows how many students chose each option (A, B, C, D) for each question</small>
+                </div>
+                <div class="card-body">
+                    {% for qa in question_analytics %}
+                    <div class="question-analysis mb-4 p-3" style="border: 1px solid #dee2e6; border-radius: 0.25rem;">
+                        <h6 class="mb-3">
+                            <span class="badge badge-primary mr-2">Q{{ qa.question.q_id }}</span>
+                            {{ qa.question.ques[:100] }}{% if qa.question.ques|length > 100 %}...{% endif %}
+                        </h6>
+                        
+                        <!-- Success Rate -->
+                        <div class="mb-3">
+                            <strong>Success Rate: 
+                                <span class="{% if qa.success_rate >= 70 %}text-success{% elif qa.success_rate >= 50 %}text-warning{% else %}text-danger{% endif %}">
+                                    {{ "%.1f"|format(qa.success_rate) }}%
+                                </span>
+                                ({{ qa.correct_count }}/{{ qa.total_responses }} students)
+                            </strong>
+                        </div>
+
+                        <!-- Answer Distribution -->
+                        <div class="row">
+                            {% set max_count = [qa.choice_a, qa.choice_b, qa.choice_c, qa.choice_d] | max %}
+                            
+                            <div class="col-md-3">
+                                <div class="answer-option {% if qa.question.ans == qa.question.a %}bg-success text-white{% elif qa.choice_a == max_count and qa.question.ans != qa.question.a %}bg-danger text-white{% endif %} p-2 rounded">
+                                    <strong>A: {{ qa.question.a[:30] }}{% if qa.question.a|length > 30 %}...{% endif %}</strong>
+                                    <div class="mt-1">
+                                        <span class="badge badge-light">{{ qa.choice_a }} students</span>
+                                        {% if qa.total_responses > 0 %}
+                                            <small>({{ "%.0f"|format((qa.choice_a / qa.total_responses) * 100) }}%)</small>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="col-md-3">
+                                <div class="answer-option {% if qa.question.ans == qa.question.b %}bg-success text-white{% elif qa.choice_b == max_count and qa.question.ans != qa.question.b %}bg-danger text-white{% endif %} p-2 rounded">
+                                    <strong>B: {{ qa.question.b[:30] }}{% if qa.question.b|length > 30 %}...{% endif %}</strong>
+                                    <div class="mt-1">
+                                        <span class="badge badge-light">{{ qa.choice_b }} students</span>
+                                        {% if qa.total_responses > 0 %}
+                                            <small>({{ "%.0f"|format((qa.choice_b / qa.total_responses) * 100) }}%)</small>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="col-md-3">
+                                <div class="answer-option {% if qa.question.ans == qa.question.c %}bg-success text-white{% elif qa.choice_c == max_count and qa.question.ans != qa.question.c %}bg-danger text-white{% endif %} p-2 rounded">
+                                    <strong>C: {{ qa.question.c[:30] }}{% if qa.question.c|length > 30 %}...{% endif %}</strong>
+                                    <div class="mt-1">
+                                        <span class="badge badge-light">{{ qa.choice_c }} students</span>
+                                        {% if qa.total_responses > 0 %}
+                                            <small>({{ "%.0f"|format((qa.choice_c / qa.total_responses) * 100) }}%)</small>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="col-md-3">
+                                <div class="answer-option {% if qa.question.ans == qa.question.d %}bg-success text-white{% elif qa.choice_d == max_count and qa.question.ans != qa.question.d %}bg-danger text-white{% endif %} p-2 rounded">
+                                    <strong>D: {{ qa.question.d[:30] }}{% if qa.question.d|length > 30 %}...{% endif %}</strong>
+                                    <div class="mt-1">
+                                        <span class="badge badge-light">{{ qa.choice_d }} students</span>
+                                        {% if qa.total_responses > 0 %}
+                                            <small>({{ "%.0f"|format((qa.choice_d / qa.total_responses) * 100) }}%)</small>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Analysis Notes -->
+                        <div class="mt-3">
+                            <small class="text-muted">
+                                <i class="fas fa-lightbulb"></i> 
+                                Correct Answer: <strong>{{ qa.question.ans }}</strong>
+                                {% if qa.choice_a == max_count and qa.question.ans != qa.question.a %}
+                                    | Most popular wrong answer: A ({{ qa.choice_a }} students) - Consider reviewing this distractor
+                                {% elif qa.choice_b == max_count and qa.question.ans != qa.question.b %}
+                                    | Most popular wrong answer: B ({{ qa.choice_b }} students) - Consider reviewing this distractor
+                                {% elif qa.choice_c == max_count and qa.question.ans != qa.question.c %}
+                                    | Most popular wrong answer: C ({{ qa.choice_c }} students) - Consider reviewing this distractor
+                                {% elif qa.choice_d == max_count and qa.question.ans != qa.question.d %}
+                                    | Most popular wrong answer: D ({{ qa.choice_d }} students) - Consider reviewing this distractor
+                                {% endif %}
+                            </small>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body text-center py-5">
+                    <i class="fas fa-chart-bar fa-3x text-muted mb-3"></i>
+                    <h4 class="text-muted">No Analytics Data Available</h4>
+                    <p class="text-muted">Students need to take quizzes first to generate analytics data.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<style>
+.answer-option {
+    min-height: 80px;
+}
+.bg-success {
+    background-color: #28a745 !important;
+}
+.bg-danger {
+    background-color: #dc3545 !important;
+}
+</style>
+{% endblock %}

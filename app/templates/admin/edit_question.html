@@ -91,6 +91,47 @@
                             </div>
                         </div>
 
+                        <!-- Module 1: Enhanced Educational Content Fields -->
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    {{ form.quiz_category.label(class="form-label font-weight-bold") }}
+                                    {{ form.quiz_category(class="form-control") }}
+                                    <small class="form-text text-muted">Quiz category for grouping</small>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    {{ form.points.label(class="form-label font-weight-bold") }}
+                                    {{ form.points(class="form-control") }}
+                                    <small class="form-text text-muted">Question weight (1-10 points)</small>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    {{ form.category.label(class="form-label font-weight-bold") }}
+                                    {{ form.category(class="form-control") }}
+                                    <small class="form-text text-muted">Subject category for analytics</small>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    {{ form.media_path.label(class="form-label font-weight-bold") }}
+                                    {{ form.media_path(class="form-control") }}
+                                    <small class="form-text text-muted">Optional image filename</small>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            {{ form.rationalization.label(class="form-label font-weight-bold") }}
+                            {{ form.rationalization(class="form-control") }}
+                            <small class="form-text text-muted">📚 Explanation shown for wrong answers (Module 2)</small>
+                        </div>
+
                         <!-- Submit Buttons -->
                         <div class="form-group text-right">
                             <a href="{{ url_for('admin_questions') }}" class="btn btn-secondary mr-2">

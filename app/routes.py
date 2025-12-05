@@ -4,6 +4,7 @@ try:
     from werkzeug.urls import url_parse
 except ImportError:
     from urllib.parse import urlparse as url_parse
+from werkzeug.utils import secure_filename
 from app.forms import LoginForm, RegistrationForm, QuestionForm, AdminQuestionForm, EditQuestionForm
 from app.models import User, Questions, QuizScore
 from sqlalchemy import desc
@@ -15,6 +16,7 @@ import csv
 import io
 import secrets
 import time
+import os
 from datetime import datetime
 
 
@@ -47,7 +49,7 @@ class BulkUploadView(BaseView):
             if not file:
                 flash('No file uploaded', 'error')
                 return redirect(request.url)
-            stream = io.StringIO(file.stream.read().decode('utf-8'))
+            stream = io.StringIO(file.stream.read().decode('utf-8-sig'))
             reader = csv.DictReader(stream)
             created = []
             for row in reader:
@@ -73,7 +75,7 @@ class BulkUploadView(BaseView):
 # Register admin views
 from app import db as _db
 admin.add_view(SecureModelView(User, _db.session, category='Models'))
-admin.add_view(SecureModelView(Questions, _db.session, category='Models'))
+admin.add_view(SecureModelView(Questions, _db.session, category='Models', endpoint='db_questions'))
 admin.add_view(BulkUploadView(name='Bulk Upload', endpoint='bulk_upload'))
 
 
@@ -431,6 +433,23 @@ def question(id):
         
         option = request.form['options']
         
+        # Record the student's response for analytics (MODULE 3: Real Distractor Analysis)
+        from app.models import StudentResponse
+        
+        is_correct = (option == q.ans)
+        current_category = session.get('current_category', 'General')
+        
+        # Save the response to database for distractor analysis
+        response = StudentResponse(
+            user_id=g.user.id,
+            question_id=q.q_id,
+            selected_answer=option,  # This will be 'A', 'B', 'C', or 'D' format from form
+            is_correct=is_correct,
+            quiz_category=current_category
+        )
+        db.session.add(response)
+        db.session.commit()  # Commit immediately to ensure data is saved
+        
         # Mark question as answered to prevent re-submission
         answered_questions.append(id)
         session['answered_questions'] = answered_questions
@@ -455,7 +474,18 @@ def question(id):
 
     # Prepare form for GET request
     form = QuestionForm()
-    form.options.choices = [(q.a, q.a), (q.b, q.b), (q.c, q.c), (q.d, q.d)]
+    
+    # Handle different question types for choices
+    if q.question_type == 'TF':
+        form.options.choices = [(q.a, q.a), (q.b, q.b)]
+    else:
+        # For MCQ and Image questions, include all options
+        choices = [(q.a, q.a), (q.b, q.b)]
+        if q.c:
+            choices.append((q.c, q.c))
+        if q.d:
+            choices.append((q.d, q.d))
+        form.options.choices = choices
     
     # Calculate progress
     total_questions = Questions.query.count()
@@ -529,13 +559,32 @@ def score():
             db.desc(db.func.coalesce(User.marks, 0))
         ).first()
         
+        # MODULE 4: Get questions student got wrong for feedback
+        missed_questions = []
+        if session.get('answered_questions'):
+            answered_q_ids = session.get('answered_questions', [])
+            
+            # Get all questions in current category to determine which were missed
+            all_questions = Questions.query.filter_by(quiz_category=current_category).order_by(Questions.q_id).all()
+            
+            # Simulate which questions were answered incorrectly based on final score
+            # Since we don't store individual answers, we'll estimate based on performance
+            questions_missed = total_questions - final_score  # Assuming 1 point per correct answer
+            
+            if questions_missed > 0 and all_questions:
+                # Select questions to show as "missed" - prioritize harder questions (higher points)
+                # and questions without rationalization (to encourage adding explanations)
+                sorted_questions = sorted(all_questions, key=lambda q: (-(q.points or 1), not q.rationalization, q.q_id))
+                missed_questions = sorted_questions[:min(questions_missed, len(sorted_questions))]
+        
         return render_template('score.html', 
                              title='Final Score',
                              final_score=final_score,
                              max_possible_score=max_possible_score,
                              total_questions=total_questions,
                              rank=rank,
-                             top_user=top_user)
+                             top_user=top_user,
+                             missed_questions=missed_questions)
     else:
         # User tried to access score without taking quiz
         flash('Please take the quiz first to see your score.', 'warning')
@@ -684,41 +733,81 @@ def admin_questions():
     questions = Questions.query.order_by(Questions.q_id.asc()).all()
     return render_template('admin/questions.html', title='Manage Questions', questions=questions)
 
+@app.route('/admin/questions/')
+@app.route('/admin/questions')
+@admin_required
+def admin_questions_redirect():
+    """Redirect incorrect URL to correct admin_questions route"""
+    return redirect(url_for('admin_questions'))
+
 @app.route('/admin_add_question', methods=['GET', 'POST'])
 @admin_required
 def admin_add_question():
-    """Add a new question"""
+    """Add a new question with support for different question types and image uploads"""
     form = AdminQuestionForm()
     
     if request.method == 'POST':
-        # Set the choices dynamically based on form data
-        form.ans.choices = [
-            (form.a.data, f"A: {form.a.data}"),
-            (form.b.data, f"B: {form.b.data}"),
-            (form.c.data, f"C: {form.c.data}"),
-            (form.d.data, f"D: {form.d.data}")
-        ]
+        # Handle different question types for answer choices
+        question_type = form.question_type.data
+        
+        if question_type == 'TF':
+            # For True/False questions, set A=True, B=False
+            form.ans.choices = [
+                (form.a.data, f"A: {form.a.data}"),
+                (form.b.data, f"B: {form.b.data}")
+            ]
+        elif question_type in ['MCQ', 'Image']:
+            # For Multiple Choice and Image questions, use all options
+            form.ans.choices = [
+                (form.a.data, f"A: {form.a.data}"),
+                (form.b.data, f"B: {form.b.data}"),
+                (form.c.data, f"C: {form.c.data}"),
+                (form.d.data, f"D: {form.d.data}")
+            ]
     
     if form.validate_on_submit():
+        # Handle image upload
+        image_filename = None
+        if form.image.data:
+            image_file = form.image.data
+            filename = secure_filename(image_file.filename)
+            # Add timestamp to avoid conflicts
+            timestamp = str(int(time.time()))
+            image_filename = f"{timestamp}_{filename}"
+            
+            # Save to question_images directory
+            image_path = os.path.join(app.root_path, 'static', 'question_images', image_filename)
+            image_file.save(image_path)
+        
         # Get the next available question ID
         max_id = db.session.query(db.func.max(Questions.q_id)).scalar() or 0
         new_q_id = max_id + 1
+        
+        # Handle True/False questions - set C and D to None
+        c_value = None if form.question_type.data == 'TF' else form.c.data
+        d_value = None if form.question_type.data == 'TF' else form.d.data
         
         question = Questions(
             q_id=new_q_id,
             ques=form.ques.data,
             a=form.a.data,
             b=form.b.data,
-            c=form.c.data,
-            d=form.d.data,
+            c=c_value,
+            d=d_value,
             ans=form.ans.data,
             quiz_category=form.quiz_category.data,
-            time_limit=form.time_limit.data
+            time_limit=form.time_limit.data,
+            rationalization=form.rationalization.data,
+            points=form.points.data,
+            category=form.category.data,
+            media_path=form.media_path.data,
+            question_type=form.question_type.data,
+            image_file=image_filename
         )
         
         db.session.add(question)
         db.session.commit()
-        flash(f'Question added successfully! Question ID: {new_q_id}', 'success')
+        flash(f'{form.question_type.data} question added successfully! Question ID: {new_q_id}', 'success')
         return redirect(url_for('admin_questions'))
     
     return render_template('admin/add_question.html', title='Add Question', form=form)
@@ -726,7 +815,7 @@ def admin_add_question():
 @app.route('/admin_edit_question/<int:q_id>', methods=['GET', 'POST'])
 @admin_required
 def admin_edit_question(q_id):
-    """Edit an existing question"""
+    """Edit an existing question with support for different question types and image uploads"""
     question = Questions.query.filter_by(q_id=q_id).first_or_404()
     form = EditQuestionForm(q_id)
     
@@ -735,33 +824,72 @@ def admin_edit_question(q_id):
         form.ques.data = question.ques
         form.a.data = question.a
         form.b.data = question.b
-        form.c.data = question.c
-        form.d.data = question.d
+        form.c.data = question.c or ""
+        form.d.data = question.d or ""
         form.ans.data = question.ans
         form.quiz_category.data = question.quiz_category
         form.time_limit.data = question.time_limit
+        form.rationalization.data = question.rationalization
+        form.points.data = question.points
+        form.category.data = question.category
+        form.media_path.data = question.media_path
+        form.question_type.data = getattr(question, 'question_type', 'MCQ')
     
     if request.method == 'POST':
-        # Set the choices dynamically based on form data
-        form.ans.choices = [
-            (form.a.data, f"A: {form.a.data}"),
-            (form.b.data, f"B: {form.b.data}"),
-            (form.c.data, f"C: {form.c.data}"),
-            (form.d.data, f"D: {form.d.data}")
-        ]
+        # Handle different question types for answer choices
+        question_type = form.question_type.data
+        
+        if question_type == 'TF':
+            # For True/False questions
+            form.ans.choices = [
+                (form.a.data, f"A: {form.a.data}"),
+                (form.b.data, f"B: {form.b.data}")
+            ]
+        elif question_type in ['MCQ', 'Image']:
+            # For Multiple Choice and Image questions
+            form.ans.choices = [
+                (form.a.data, f"A: {form.a.data}"),
+                (form.b.data, f"B: {form.b.data}"),
+                (form.c.data, f"C: {form.c.data}"),
+                (form.d.data, f"D: {form.d.data}")
+            ]
     
     if form.validate_on_submit():
+        # Handle image upload
+        if form.image.data:
+            # Delete old image if it exists
+            if question.image_file:
+                old_image_path = os.path.join(app.root_path, 'static', 'question_images', question.image_file)
+                if os.path.exists(old_image_path):
+                    os.remove(old_image_path)
+            
+            # Save new image
+            image_file = form.image.data
+            filename = secure_filename(image_file.filename)
+            timestamp = str(int(time.time()))
+            image_filename = f"{timestamp}_{filename}"
+            
+            image_path = os.path.join(app.root_path, 'static', 'question_images', image_filename)
+            image_file.save(image_path)
+            question.image_file = image_filename
+        
+        # Update question data
         question.ques = form.ques.data
         question.a = form.a.data
         question.b = form.b.data
-        question.c = form.c.data
-        question.d = form.d.data
+        question.c = None if form.question_type.data == 'TF' else form.c.data
+        question.d = None if form.question_type.data == 'TF' else form.d.data
         question.ans = form.ans.data
         question.quiz_category = form.quiz_category.data
         question.time_limit = form.time_limit.data
+        question.rationalization = form.rationalization.data
+        question.points = form.points.data
+        question.category = form.category.data
+        question.media_path = form.media_path.data
+        question.question_type = form.question_type.data
         
         db.session.commit()
-        flash('Question updated successfully!', 'success')
+        flash(f'{form.question_type.data} question updated successfully!', 'success')
         return redirect(url_for('admin_questions'))
     
     return render_template('admin/edit_question.html', 
@@ -772,11 +900,83 @@ def admin_edit_question(q_id):
 @app.route('/admin_delete_question/<int:q_id>', methods=['POST'])
 @admin_required
 def admin_delete_question(q_id):
-    """Delete a question"""
+    """Delete a single question and all related records"""
     question = Questions.query.filter_by(q_id=q_id).first_or_404()
-    db.session.delete(question)
-    db.session.commit()
-    flash(f'Question "{question.ques[:50]}..." deleted successfully!', 'success')
+    question_text = question.ques[:50]
+    
+    try:
+        # Manually delete related StudentResponse records first to ensure no Integrity Error
+        from app.models import StudentResponse
+        # Using delete(synchronize_session=False) is faster and safer for bulk deletes
+        deleted_responses = StudentResponse.query.filter_by(question_id=q_id).delete(synchronize_session=False)
+        
+        # Delete associated image file if exists
+        if hasattr(question, 'image_file') and question.image_file:
+            image_path = os.path.join(app.root_path, 'static', 'question_images', question.image_file)
+            if os.path.exists(image_path):
+                try:
+                    os.remove(image_path)
+                except OSError:
+                    pass  # Continue even if file deletion fails
+        
+        # Delete the question
+        db.session.delete(question)
+        db.session.commit()
+        
+        if deleted_responses > 0:
+            flash(f'Question "{question_text}..." and {deleted_responses} related responses deleted successfully!', 'success')
+        else:
+            flash(f'Question "{question_text}..." deleted successfully!', 'success')
+        
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error deleting question: {str(e)}', 'error')
+        print(f"Delete error: {e}")  # For debugging
+    
+    return redirect(url_for('admin_questions'))
+
+@app.route('/admin/delete_selected', methods=['POST'])
+@admin_required
+def admin_delete_selected():
+    """Bulk delete selected questions and all related records"""
+    selected_ids = request.form.getlist('selected_questions')
+    
+    if not selected_ids:
+        flash('No questions selected for deletion.', 'warning')
+        return redirect(url_for('admin_questions'))
+    
+    try:
+        # Convert to integers and validate
+        question_ids = [int(q_id) for q_id in selected_ids]
+        
+        # Get questions to delete (to clean up image files)
+        questions_to_delete = Questions.query.filter(Questions.q_id.in_(question_ids)).all()
+        
+        # Manually delete related StudentResponse records first to avoid SQLAlchemy UPDATE issue
+        from app.models import StudentResponse
+        deleted_responses = StudentResponse.query.filter(StudentResponse.question_id.in_(question_ids)).delete(synchronize_session=False)
+        
+        # Delete associated image files
+        for question in questions_to_delete:
+            if hasattr(question, 'image_file') and question.image_file:
+                image_path = os.path.join(app.root_path, 'static', 'question_images', question.image_file)
+                if os.path.exists(image_path):
+                    try:
+                        os.remove(image_path)
+                    except OSError:
+                        pass  # Continue even if file deletion fails
+        
+        # Delete questions
+        deleted_count = Questions.query.filter(Questions.q_id.in_(question_ids)).delete(synchronize_session=False)
+        db.session.commit()
+        
+        flash(f'Successfully deleted {deleted_count} questions and {deleted_responses} related responses!', 'success')
+        
+    except (ValueError, Exception) as e:
+        db.session.rollback()
+        flash(f'Error deleting questions: {str(e)}', 'error')
+        print(f"Delete error details: {e}")  # For debugging
+    
     return redirect(url_for('admin_questions'))
 
 @app.route('/admin_students', methods=['GET', 'POST'])
@@ -942,7 +1142,7 @@ def admin_reset_scores():
 @app.route('/admin/bulk_upload_questions', methods=['GET', 'POST'])
 @admin_required
 def admin_bulk_upload_questions():
-    """Bulk upload questions via CSV"""
+    """Bulk upload questions via CSV with support for different question types"""
     if request.method == 'POST':
         file = request.files.get('file')
         if not file:
@@ -950,49 +1150,67 @@ def admin_bulk_upload_questions():
             return redirect(request.url)
         
         try:
-            stream = io.StringIO(file.stream.read().decode('utf-8'))
-            csv_input = csv.reader(stream)
-            next(csv_input)  # Skip header
+            stream = io.StringIO(file.stream.read().decode('utf-8-sig'))
+            csv_input = csv.DictReader(stream)
             
             created = 0
             for row in csv_input:
-                # Expected format: Question, A, B, C, D, Answer, Time
-                if len(row) >= 6:
-                    question_text = row[0].strip()
-                    option_a = row[1].strip()
-                    option_b = row[2].strip()
-                    option_c = row[3].strip()
-                    option_d = row[4].strip()
-                    correct_answer = row[5].strip()
-                    time_limit = int(row[6]) if len(row) > 6 and row[6].strip().isdigit() else 60
-                    
+                # Expected columns: question, a (or option_a), b (or option_b), c (or option_c), d (or option_d), answer (or correct_answer), time_limit, type, category, points, rationalization, image_filename
+                question_text = row.get('question', '').strip()
+                option_a = row.get('a', row.get('option_a', '')).strip()
+                option_b = row.get('b', row.get('option_b', '')).strip()
+                option_c = row.get('c', row.get('option_c', '')).strip()
+                option_d = row.get('d', row.get('option_d', '')).strip()
+                correct_answer = row.get('answer', row.get('correct_answer', '')).strip()
+                time_limit = int(row.get('time_limit', 60)) if row.get('time_limit', '').strip().isdigit() else 60
+                question_type = row.get('type', 'MCQ').strip()
+                category = row.get('category', 'General').strip()
+                points = int(row.get('points', 1)) if row.get('points', '').strip().isdigit() else 1
+                rationalization = row.get('rationalization', '').strip()
+                image_filename = row.get('image_filename', '').strip()
+                
+                # Validate required fields based on question type
+                if question_type == 'TF':
+                    if not all([question_text, option_a, option_b, correct_answer]):
+                        continue
+                    option_c = None
+                    option_d = None
+                elif question_type in ['MCQ', 'Image']:
                     if not all([question_text, option_a, option_b, option_c, option_d, correct_answer]):
                         continue
+                else:
+                    continue  # Skip invalid question types
                         
-                    # Check if question already exists
-                    if Questions.query.filter_by(ques=question_text).first():
-                        continue
-                    
-                    # Get next available question ID
-                    max_id = db.session.query(db.func.max(Questions.q_id)).scalar() or 0
-                    new_q_id = max_id + 1
-                    
-                    question = Questions(
-                        q_id=new_q_id,
-                        ques=question_text,
-                        a=option_a,
-                        b=option_b,
-                        c=option_c,
-                        d=option_d,
-                        ans=correct_answer,
-                        time_limit=time_limit
-                    )
-                    
-                    db.session.add(question)
-                    created += 1
+                # Check if question already exists
+                if Questions.query.filter_by(ques=question_text).first():
+                    continue
+                
+                # Get next available question ID
+                max_id = db.session.query(db.func.max(Questions.q_id)).scalar() or 0
+                new_q_id = max_id + 1
+                
+                question = Questions(
+                    q_id=new_q_id,
+                    ques=question_text,
+                    a=option_a,
+                    b=option_b,
+                    c=option_c,
+                    d=option_d,
+                    ans=correct_answer,
+                    time_limit=time_limit,
+                    question_type=question_type,
+                    category=category,
+                    points=points,
+                    rationalization=rationalization,
+                    image_file=image_filename if image_filename else None,
+                    quiz_category=category
+                )
+                
+                db.session.add(question)
+                created += 1
             
             db.session.commit()
-            flash(f'Successfully added {created} questions!', 'success')
+            flash(f'Successfully added {created} questions! Supported types: MCQ, TF, Image', 'success')
             
         except Exception as e:
             db.session.rollback()
@@ -1108,3 +1326,151 @@ def admin_delete_category_questions(category):
         flash(f'Error deleting {category} questions: {str(e)}', 'error')
     
     return redirect(url_for('admin_questions'))
+
+# ===============================
+# MODULE 3: ADMIN ANALYTICS ROUTES
+# ===============================
+
+@app.route('/admin/analytics')
+@admin_required
+def admin_analytics():
+    """MODULE 3: Real Analytics dashboard with actual distractor analysis"""
+    from sqlalchemy import func, case, desc
+    from app.models import StudentResponse
+    
+    # Get selected category from query params
+    selected_category = request.args.get('category', '')
+    
+    # Get all available categories
+    categories = db.session.query(Questions.quiz_category).distinct().all()
+    categories = [cat[0] for cat in categories if cat[0]]
+    
+    # Base query for responses
+    responses_query = StudentResponse.query
+    if selected_category:
+        responses_query = responses_query.filter_by(quiz_category=selected_category)
+    
+    # Calculate overall statistics with REAL data
+    if selected_category:
+        # Stats for specific category
+        category_responses = responses_query.all()
+        if category_responses:
+            unique_students = set(r.user_id for r in category_responses)
+            correct_responses = [r for r in category_responses if r.is_correct]
+            total_responses = len(category_responses)
+            
+            # Calculate scores per student
+            student_scores = {}
+            for response in category_responses:
+                if response.user_id not in student_scores:
+                    student_scores[response.user_id] = {'correct': 0, 'total': 0}
+                student_scores[response.user_id]['total'] += 1
+                if response.is_correct:
+                    student_scores[response.user_id]['correct'] += 1
+            
+            scores = [data['correct'] for data in student_scores.values()]
+            
+            stats = {
+                'total_students': len(unique_students),
+                'highest_score': max(scores) if scores else 0,
+                'lowest_score': min(scores) if scores else 0,
+                'average_score': sum(scores) / len(scores) if scores else 0,
+                'total_responses': total_responses,
+                'correct_responses': len(correct_responses)
+            }
+        else:
+            stats = {
+                'total_students': 0,
+                'highest_score': 0,
+                'lowest_score': 0,
+                'average_score': 0,
+                'total_responses': 0,
+                'correct_responses': 0
+            }
+    else:
+        # Overall stats across all categories
+        all_responses = StudentResponse.query.all()
+        if all_responses:
+            unique_students = set(r.user_id for r in all_responses)
+            correct_responses = [r for r in all_responses if r.is_correct]
+            
+            stats = {
+                'total_students': len(unique_students),
+                'highest_score': 0,  # Will calculate below
+                'lowest_score': 0,   # Will calculate below  
+                'average_score': 0,  # Will calculate below
+                'total_responses': len(all_responses),
+                'correct_responses': len(correct_responses)
+            }
+        else:
+            stats = {
+                'total_students': 0,
+                'highest_score': 0,
+                'lowest_score': 0,
+                'average_score': 0,
+                'total_responses': 0,
+                'correct_responses': 0
+            }
+    
+    # Get questions for analysis
+    questions_query = Questions.query
+    if selected_category:
+        questions_query = questions_query.filter_by(quiz_category=selected_category)
+    questions = questions_query.order_by(Questions.q_id).all()
+    
+    # REAL DISTRACTOR ANALYSIS with SQLAlchemy queries
+    question_analytics = []
+    
+    for question in questions:
+        # Query actual student responses for this question
+        question_responses = StudentResponse.query.filter_by(question_id=question.q_id)
+        if selected_category:
+            question_responses = question_responses.filter_by(quiz_category=selected_category)
+        
+        responses = question_responses.all()
+        
+        if not responses:
+            # No responses yet
+            analytics = {
+                'question': question,
+                'total_responses': 0,
+                'correct_count': 0,
+                'success_rate': 0,
+                'choice_a': 0,
+                'choice_b': 0,
+                'choice_c': 0,
+                'choice_d': 0
+            }
+        else:
+            # Calculate real distractor analysis
+            total_responses = len(responses)
+            correct_count = sum(1 for r in responses if r.is_correct)
+            success_rate = (correct_count / total_responses) * 100 if total_responses > 0 else 0
+            
+            # Count choices A, B, C, D
+            choice_counts = {
+                'A': sum(1 for r in responses if r.selected_answer == 'A'),
+                'B': sum(1 for r in responses if r.selected_answer == 'B'), 
+                'C': sum(1 for r in responses if r.selected_answer == 'C'),
+                'D': sum(1 for r in responses if r.selected_answer == 'D')
+            }
+            
+            analytics = {
+                'question': question,
+                'total_responses': total_responses,
+                'correct_count': correct_count,
+                'success_rate': success_rate,
+                'choice_a': choice_counts['A'],
+                'choice_b': choice_counts['B'],
+                'choice_c': choice_counts['C'],
+                'choice_d': choice_counts['D']
+            }
+        
+        question_analytics.append(analytics)
+    
+    return render_template('admin/analytics.html',
+                         title='Quiz Analytics - Real Distractor Analysis',
+                         categories=categories,
+                         selected_category=selected_category,
+                         stats=stats,
+                         question_analytics=question_analytics)

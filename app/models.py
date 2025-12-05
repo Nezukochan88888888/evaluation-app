@@ -41,6 +41,16 @@ class Questions(db.Model):
     ans = db.Column(db.String(100))
     time_limit = db.Column(db.Integer, default=60, nullable=False)
     quiz_category = db.Column(db.String(64), default='General', nullable=False)
+    
+    # Enhanced Educational Content fields
+    rationalization = db.Column(db.Text)  # Explanation of the correct answer
+    points = db.Column(db.Integer, default=1, nullable=False)  # Weight for harder questions
+    category = db.Column(db.String(100))  # Category/Tag (e.g., "History", "Math")
+    media_path = db.Column(db.String(255))  # Filename for local images (optional)
+    
+    # New fields for Differentiated Question Types
+    question_type = db.Column(db.String(10), default='MCQ', nullable=False)  # 'MCQ', 'TF', 'Image'
+    image_file = db.Column(db.String(255), nullable=True)  # Store uploaded image filenames
 
     def __repr__(self):
         return '<Question: {}>'.format(self.ques)
@@ -56,3 +66,24 @@ class QuizScore(db.Model):
     
     def __repr__(self):
         return '<QuizScore: {} - {} points in {} ({})>'.format(self.user_id, self.score, self.quiz_category, self.status)
+
+
+class StudentResponse(db.Model):
+    """Track individual question responses for distractor analysis"""
+    __tablename__ = 'student_response'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    question_id = db.Column(db.Integer, db.ForeignKey('questions.q_id', ondelete='CASCADE'), nullable=False)
+    selected_answer = db.Column(db.String(1), nullable=False)  # 'A', 'B', 'C', or 'D'
+    is_correct = db.Column(db.Boolean, nullable=False)
+    quiz_category = db.Column(db.String(64), nullable=False)
+    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    # Define the relationship from the StudentResponse side with proper cascade
+    question = db.relationship('Questions', backref=db.backref('responses', cascade='all, delete-orphan'))
+    user = db.relationship('User', backref='user_responses')
+    
+    def __repr__(self):
+        return '<StudentResponse: User {} answered {} for Q{} ({}correct)>'.format(
+            self.user_id, self.selected_answer, self.question_id, '' if self.is_correct else 'in')
