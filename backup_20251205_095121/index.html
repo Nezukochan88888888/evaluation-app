@@ -32,7 +32,7 @@
                     <h4>🎉 Quiz Completed!</h4>
                     <p>Your score: <strong>{{ user_score }} points</strong> | Rank: <strong>#{{ rank }}</strong></p>
                     <div>
-                        <!-- Retake button removed for security -->
+                        <a href="{{ url_for('retake') }}" class="btn btn-warning mr-2">Retake Quiz</a>
                         <a href="{{ url_for('leaderboard') }}" class="btn btn-info">Leaderboard</a>
                     </div>
                 {% else %}

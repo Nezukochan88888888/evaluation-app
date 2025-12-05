@@ -8,3 +8,4 @@ class Config(object):
         'sqlite:///' + os.path.join(basedir, 'app.db')
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     QUES_PER_PAGE = 1
+    WTF_CSRF_ENABLED = False  # Disable CSRF temporarily for quiz functionality

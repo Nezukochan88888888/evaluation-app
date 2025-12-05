@@ -16,7 +16,7 @@ login = LoginManager(app)
 login.login_view = 'login'
 
 # Admin
-admin = Admin(app, name='Exam Admin', template_mode='bootstrap3')
+admin = Admin(app, name='Exam Admin')
 
 from app import routes
 from app import cli

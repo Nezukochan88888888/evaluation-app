@@ -52,6 +52,7 @@ class QuizScore(db.Model):
     quiz_category = db.Column(db.String(64), nullable=False)
     score = db.Column(db.Integer, nullable=False)
     timestamp = db.Column(db.DateTime, default=datetime.utcnow)
+    status = db.Column(db.String(20), nullable=False, default='completed')  # 'completed' or 'incomplete'
     
     def __repr__(self):
-        return '<QuizScore: {} - {} points in {}>'.format(self.user_id, self.score, self.quiz_category)
+        return '<QuizScore: {} - {} points in {} ({})>'.format(self.user_id, self.score, self.quiz_category, self.status)

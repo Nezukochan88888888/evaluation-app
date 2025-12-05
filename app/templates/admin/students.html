@@ -13,7 +13,7 @@
                     <a href="{{ url_for('admin_export_scores') }}" class="btn btn-secondary mr-2" title="Download CSV">
                         <i class="fas fa-download"></i> Export CSV
                     </a>
-                    <form method="POST" action="{{ url_for('admin_reset_scores') }}" class="d-inline mr-2">
+                    <form method="POST" action="{{ url_for('admin_reset_all_scores') }}" class="d-inline mr-2">
                         <button type="submit" class="btn btn-warning" 
                                 onclick="return confirm('Are you sure you want to reset ALL student scores? This will allow all students to retake the quiz.');"
                                 title="Reset all scores">
@@ -47,7 +47,7 @@
                     <div class="col-md-3">
                         <div class="card bg-success text-white">
                             <div class="card-body text-center">
-                                <h4>{{ students|selectattr("marks")|list|length }}</h4>
+                                <h4>{{ students|selectattr("legacy_marks")|list|length }}</h4>
                                 <p class="mb-0">Attempted Quiz</p>
                             </div>
                         </div>
@@ -102,7 +102,7 @@
                                     {% for student in students %}
                                         <tr>
                                             <td>
-                                                {% if loop.index <= 3 and student.marks and student.marks > 0 %}
+                                                {% if loop.index <= 3 and student.quiz_score and student.quiz_score > 0 %}
                                                     {% if loop.index == 1 %}
                                                         <span class="badge badge-warning">🥇 #{{ loop.index }}</span>
                                                     {% elif loop.index == 2 %}
@@ -121,32 +121,50 @@
                                                 <small class="text-muted">{{ student.email }}</small>
                                             </td>
                                             <td>
-                                                {% if student.marks is not none and student.marks > 0 %}
-                                                    <span class="badge badge-success badge-lg">{{ student.marks }} pts</span>
+                                                {% if student.display_score != 'Not Started' %}
+                                                    <span class="badge badge-success badge-lg">{{ student.display_score }} pts</span>
                                                 {% else %}
                                                     <span class="badge badge-light">No score</span>
                                                 {% endif %}
                                             </td>
                                             <td>
-                                                {% if student.marks is not none and student.marks > 0 %}
+                                                {% if student.quiz_status == 'completed' %}
+                                                    <span class="badge badge-success">✅ Completed</span>
+                                                {% elif student.quiz_status == 'incomplete' %}
+                                                    <span class="badge badge-warning">⚠️ Incomplete</span>
+                                                {% else %}
+                                                    <span class="badge badge-secondary">❌ Not Started</span>
+                                                {% endif %}
+                                            </td>
+                                            <td>
+                                                {% if student.quiz_category %}
+                                                    <span class="badge badge-info">{{ student.quiz_category }}</span>
+                                                {% else %}
+                                                    <span class="text-muted">-</span>
+                                                {% endif %}
+                                            </td>
+                                            <td>
+                                                {% if student.quiz_timestamp %}
+                                                    <small>{{ student.quiz_timestamp.strftime('%Y-%m-%d %H:%M') }}</small>
+                                                {% else %}
+                                                    <span class="text-muted">-</span>
+                                                {% endif %}
+                                            </td>
+                                            <td>
+                                                {% if student.quiz_score is not none and student.quiz_score > 0 %}
                                                     <span class="badge badge-success">Completed</span>
                                                 {% else %}
                                                     <span class="badge badge-warning">Not started</span>
                                                 {% endif %}
                                             </td>
                                             <td>
-                                                {% if student.marks is not none and student.marks > 0 %}
+                                                {% if student.quiz_score is not none and student.quiz_score > 0 %}
                                                     <button type="button" class="btn btn-sm btn-outline-warning mr-1" 
                                                             onclick="confirmReset('{{ student.username }}', {{ student.id }})" 
                                                             title="Reset Score">
                                                         <i class="fas fa-redo"></i>
                                                     </button>
                                                 {% endif %}
-                                                <button type="button" class="btn btn-sm btn-outline-danger" 
-                                                        onclick="confirmDelete('{{ student.username }}', {{ student.id }})" 
-                                                        title="Delete Student">
-                                                    <i class="fas fa-trash"></i>
-                                                </button>
                                             </td>
                                         </tr>
                                     {% endfor %}
@@ -207,34 +225,6 @@
     </div>
 </div>
 
-<!-- Delete Student Confirmation Modal -->
-<div class="modal fade" id="deleteModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">Delete Student</h5>
-                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-                    <span aria-hidden="true">&times;</span>
-                </button>
-            </div>
-            <div class="modal-body">
-                <p>Are you sure you want to permanently delete this student?</p>
-                <div class="alert alert-danger">
-                    <strong>Student:</strong> <span id="deleteStudentName"></span>
-                </div>
-                <p class="text-danger"><strong>Warning:</strong> This action cannot be undone. All data associated with this student will be lost.</p>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
-                <form id="deleteForm" method="POST" class="d-inline">
-                    <button type="submit" class="btn btn-danger">
-                        <i class="fas fa-trash"></i> Delete Student
-                    </button>
-                </form>
-            </div>
-        </div>
-    </div>
-</div>
 
 <script>
 function confirmReset(studentName, studentId) {
@@ -243,11 +233,6 @@ function confirmReset(studentName, studentId) {
     $('#resetModal').modal('show');
 }
 
-function confirmDelete(studentName, studentId) {
-    document.getElementById('deleteStudentName').textContent = studentName;
-    document.getElementById('deleteForm').action = "{{ url_for('admin_delete_student', user_id=0) }}".replace('/0', '/' + studentId);
-    $('#deleteModal').modal('show');
-}
 </script>
 
 <style>

@@ -169,16 +169,8 @@
         }
     });
     
-    // SECURITY: System clock-based timer that works even when tab is minimized
-    var serverStartTime = Date.now() - ({{ time_taken|default(0) }} * 1000);
-    var timeLimit = {{ q.time_limit }} * 1000; // Convert to milliseconds
-    
+    // Auto-submit when time is up
     function tick() {
-        var currentTime = Date.now();
-        var elapsedTime = currentTime - serverStartTime;
-        var remainingMs = Math.max(0, timeLimit - elapsedTime);
-        var remaining = Math.floor(remainingMs / 1000);
-        
         var m = Math.floor(remaining / 60);
         var s = remaining % 60;
         el.textContent = m + ':' + (s < 10 ? '0' + s : s);
@@ -207,8 +199,8 @@
             timerAlert.className = 'alert alert-warning mb-4';
         }
         
-        // Schedule next tick with better precision
-        setTimeout(tick, 100); // Check every 100ms for better accuracy
+        remaining -= 1;
+        setTimeout(tick, 1000);
     }
     
     // Prevent form submission spam

@@ -1,4 +1,4 @@
-﻿from app import app, db, admin
+from app import app, db, admin
 from flask import render_template, request, redirect, url_for, session, g, flash, make_response
 try:
     from werkzeug.urls import url_parse
@@ -154,14 +154,17 @@ def leaderboard():
 @app.route('/retake')
 @login_required
 def retake():
-    """Disabled retakes to prevent cheating - redirect with error"""
+    """Allow student to retake the quiz"""
     if current_user.is_admin:
         flash('Admins cannot take the quiz. Please use a student account.', 'warning')
         return redirect(url_for('admin_dashboard'))
     
-    # SECURITY: Disable retakes for regular users to prevent cheating
-    flash('Retakes are disabled. Please contact your administrator if you need to retake the quiz.', 'error')
-    return redirect(url_for('home'))
+    # Clear quiz session and restart
+    session.pop('quiz_started', None)
+    session.pop('answered_questions', None)
+    session['marks'] = 0
+    
+    return redirect(url_for('start_quiz'))
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -221,67 +224,22 @@ def start_quiz(category='General'):
         flash('Admins cannot take the quiz. Please use a student account.', 'warning')
         return redirect(url_for('admin_dashboard'))
     
-    # SECURITY: Check if user already has a completed score for this category
+    # Check if user already has a score for this category
     existing_score = QuizScore.query.filter_by(
         user_id=current_user.id, 
         quiz_category=category
     ).first()
     
     if existing_score:
-        flash(f'Quiz already completed with score: {existing_score.score}. No retakes allowed.', 'warning')
+        flash(f'You have already completed the {category} quiz. Contact admin if you need to retake.', 'info')
         return redirect(url_for('score'))
     
-    # SECURITY: Check if user has any active quiz session - AUTO-RECORD INCOMPLETE QUIZ
-    if session.get('quiz_started'):
-        # Auto-record the incomplete quiz with current score
-        current_category = session.get('current_category', 'General')
-        current_marks = session.get('marks', 0)
-        
-        # Create quiz score record for incomplete quiz
-        quiz_score = QuizScore(
-            user_id=current_user.id,
-            score=current_marks,
-            quiz_category=current_category,
-            timestamp=datetime.utcnow(),
-            status='incomplete'  # Mark as incomplete
-        )
-        
-        try:
-            db.session.add(quiz_score)
-            db.session.commit()
-            flash(f'Previous {current_category} quiz auto-recorded with score {current_marks} (incomplete). No further attempts allowed.', 'warning')
-        except Exception as e:
-            db.session.rollback()
-            flash('Error recording previous quiz. Contact administrator.', 'error')
-        
-        # Clear session completely
-        session.pop('quiz_started', None)
-        session.pop('answered_questions', None)
-        session.pop('marks', None)
-        session.pop('current_category', None)
-        session.pop('quiz_start_time', None)
-        
-        # Clear all timing data
-        keys_to_remove = [key for key in session.keys() if key.startswith('start_time_')]
-        for key in keys_to_remove:
-            session.pop(key, None)
-        
-        # Now check if they already have a score for the requested category
-        existing_score = QuizScore.query.filter_by(
-            user_id=current_user.id, 
-            quiz_category=category
-        ).first()
-        
-        if existing_score:
-            return redirect(url_for('score'))
-    
-    # Initialize new quiz session
+    # Reset quiz session and store category
     session['marks'] = 0
     session['answered_questions'] = []
     session['quiz_started'] = True
     session['current_category'] = category
-    session['quiz_start_time'] = time.time()  # Track when quiz was first started
-    session.permanent = True  # Make session persistent across browser sessions
+    session['start_time'] = time.time()
     
     # Get first question in this category
     first_question = Questions.query.filter_by(quiz_category=category).order_by(Questions.q_id.asc()).first()
@@ -289,7 +247,6 @@ def start_quiz(category='General'):
         flash(f'No questions available in {category} category. Please contact your administrator.', 'error')
         return redirect(url_for('home'))
     
-    flash(f'Starting {category} quiz. WARNING: Leaving will auto-record your current score and end the quiz permanently.', 'warning')
     return redirect(url_for('ready', q_id=first_question.q_id))
 
 @app.route('/ready/<int:q_id>')
@@ -339,11 +296,6 @@ def start_timer(q_id):
     if not q:
         flash('Question not found.', 'error')
         return redirect(url_for('start_quiz'))
-    
-    # SECURITY: Check if start time already exists to prevent timer restart exploit
-    if f'start_time_{q_id}' in session:
-        flash('Question timer already started. Cannot restart timer.', 'warning')
-        return redirect(url_for('question', id=q_id))
     
     # Set the start time for this specific question (store as timestamp)
     session[f'start_time_{q_id}'] = datetime.utcnow().timestamp()
@@ -488,8 +440,7 @@ def score():
         quiz_score = QuizScore(
             user_id=current_user.id,
             quiz_category=current_category,
-            score=final_score,
-            status='completed'  # Mark as properly completed
+            score=final_score
         )
         db.session.add(quiz_score)
         
@@ -501,17 +452,11 @@ def score():
         except Exception:
             db.session.rollback()
         
-        # Clear quiz session completely
+        # Clear quiz session
         session.pop('quiz_started', None)
         session.pop('answered_questions', None)
         session.pop('marks', None)
         session.pop('current_category', None)
-        session.pop('quiz_start_time', None)
-        
-        # Clear all individual question timing data
-        keys_to_remove = [key for key in session.keys() if key.startswith('start_time_')]
-        for key in keys_to_remove:
-            session.pop(key, None)
         
         # Get total possible score for this category (1 point per question)
         total_questions = Questions.query.filter_by(quiz_category=current_category).count()
@@ -541,115 +486,13 @@ def score():
         flash('Please take the quiz first to see your score.', 'warning')
         return redirect(url_for('start_quiz'))
 
-@app.route('/auto_record_quiz', methods=['POST'])
-@login_required  
-def auto_record_quiz():
-    """Auto-record quiz when student leaves or times out - AJAX endpoint"""
-    if current_user.is_admin:
-        return {'status': 'error', 'message': 'Admin cannot take quiz'}
-    
-    # Only record if there's an active quiz session
-    if not session.get('quiz_started'):
-        return {'status': 'error', 'message': 'No active quiz session'}
-    
-    # Get current quiz data
-    current_category = session.get('current_category', 'General')
-    current_marks = session.get('marks', 0)
-    
-    # Check if already recorded
-    existing_score = QuizScore.query.filter_by(
-        user_id=current_user.id,
-        quiz_category=current_category
-    ).first()
-    
-    if existing_score:
-        return {'status': 'already_recorded', 'score': existing_score.score}
-    
-    # Create quiz score record for incomplete quiz
-    quiz_score = QuizScore(
-        user_id=current_user.id,
-        score=current_marks,
-        quiz_category=current_category,
-        timestamp=datetime.utcnow(),
-        status='incomplete'  # Mark as incomplete/abandoned
-    )
-    
-    try:
-        db.session.add(quiz_score)
-        db.session.commit()
-        
-        # Clear session data
-        session.pop('quiz_started', None)
-        session.pop('answered_questions', None)
-        session.pop('marks', None)
-        session.pop('current_category', None)
-        session.pop('quiz_start_time', None)
-        
-        # Clear all timing data
-        keys_to_remove = [key for key in session.keys() if key.startswith('start_time_')]
-        for key in keys_to_remove:
-            session.pop(key, None)
-        
-        # Update legacy marks field for compatibility
-        current_user.marks = current_marks
-        db.session.commit()
-        
-        return {
-            'status': 'success', 
-            'message': f'Quiz auto-recorded with score: {current_marks}',
-            'score': current_marks
-        }
-        
-    except Exception as e:
-        db.session.rollback()
-        return {'status': 'error', 'message': 'Database error'}
-
 @app.route('/logout')
 def logout():
     if not g.user:
         return redirect(url_for('login'))
-    
-    # SECURITY: Auto-record any incomplete quiz before logout
-    if session.get('quiz_started') and not current_user.is_admin:
-        current_category = session.get('current_category', 'General')
-        current_marks = session.get('marks', 0)
-        
-        # Check if not already recorded
-        existing_score = QuizScore.query.filter_by(
-            user_id=current_user.id,
-            quiz_category=current_category
-        ).first()
-        
-        if not existing_score:
-            quiz_score = QuizScore(
-                user_id=current_user.id,
-                score=current_marks,
-                quiz_category=current_category,
-                timestamp=datetime.utcnow(),
-                status='incomplete'
-            )
-            try:
-                db.session.add(quiz_score)
-                current_user.marks = current_marks
-                db.session.commit()
-            except Exception:
-                db.session.rollback()
-    
     logout_user()
-    
-    # SECURITY: Clear all quiz session data on logout
     session.pop('user_id', None)
     session.pop('marks', None)
-    session.pop('quiz_started', None)
-    session.pop('answered_questions', None)
-    session.pop('current_category', None)
-    session.pop('quiz_start_time', None)
-    
-    # Clear all individual question timing data
-    keys_to_remove = [key for key in session.keys() if key.startswith('start_time_')]
-    for key in keys_to_remove:
-        session.pop(key, None)
-        
     return redirect(url_for('home'))
 
 # ===============================
@@ -779,73 +622,23 @@ def admin_delete_question(q_id):
     flash(f'Question "{question.ques[:50]}..." deleted successfully!', 'success')
     return redirect(url_for('admin_questions'))
 
-@app.route('/admin_students', methods=['GET', 'POST'])
+@app.route('/admin_students')
 @admin_required
 def admin_students():
-    """View all students and their scores including incomplete attempts"""
-    # Get all students with their quiz scores
-    students = db.session.query(User).filter_by(is_admin=False).all()
-    
-    # Create enhanced student data with quiz score details
-    enhanced_students = []
-    for student in students:
-        # Refresh student object to get latest data
-        db.session.refresh(student)
-        
-        # Get latest quiz score for this student
-        latest_score = QuizScore.query.filter_by(user_id=student.id).order_by(QuizScore.timestamp.desc()).first()
-        
-        # Determine if student has any score at all
-        has_any_score = latest_score is not None or student.marks is not None
-        
-        student_data = {
-            'id': student.id,
-            'username': student.username,
-            'email': student.email,
-            'legacy_marks': student.marks,  # Keep legacy field for compatibility
-            'quiz_score': latest_score.score if latest_score else None,
-            'quiz_status': latest_score.status if latest_score else ('Not Started' if not has_any_score else 'Legacy Score'),
-            'quiz_category': latest_score.quiz_category if latest_score else None,
-            'quiz_timestamp': latest_score.timestamp if latest_score else None,
-            'display_score': 'Not Started' if (latest_score is None and student.marks is None) else (latest_score.score if latest_score else student.marks)
-        }
-        enhanced_students.append(student_data)
-    
-    # Sort by score (handling None values)
-    enhanced_students.sort(key=lambda x: (x['quiz_score'] or 0), reverse=True)
-    
-    return render_template('admin/students.html', 
-                         title='Student Scores & Performance', 
-                         students=enhanced_students)
+    """View all students and their scores"""
+    students = User.query.filter_by(is_admin=False).order_by(
+        db.desc(db.func.coalesce(User.marks, 0))
+    ).all()
+    return render_template('admin/students.html', title='Student Scores', students=students)
 
 @app.route('/admin_reset_student_score/<int:user_id>', methods=['POST'])
 @admin_required
 def admin_reset_student_score(user_id):
     """Reset a student's score"""
     student = User.query.filter_by(id=user_id, is_admin=False).first_or_404()
-    
-    try:
-        # Delete all quiz scores for this student first
-        deleted_count = QuizScore.query.filter_by(user_id=user_id).delete()
-        
-        # Reset legacy marks field
-        student.marks = None
-        
-        # Commit all changes
-        db.session.commit()
-        
-        # Refresh the student object to ensure updated data
-        db.session.refresh(student)
-        
-        if deleted_count > 0:
-            flash(f'Reset all scores for {student.username} - they can now retake the quiz. Removed {deleted_count} score record(s).', 'success')
-        else:
-            flash(f'Reset score for {student.username} - they can now retake the quiz', 'success')
-            
-    except Exception as e:
-        db.session.rollback()
-        flash(f'Error resetting score for {student.username}: {str(e)}', 'error')
-    
+    student.marks = None  # Set to None to allow retakes
+    db.session.commit()
+    flash(f'Reset score for {student.username} - they can now retake the quiz', 'success')
     return redirect(url_for('admin_students'))
 
 @app.route('/admin_add_student', methods=['GET', 'POST'])
@@ -910,15 +703,15 @@ def admin_export_scores():
         flash(f'Error exporting scores: {str(e)}', 'error')
         return redirect(url_for('admin_students'))
 
-@app.route('/admin/reset_all_scores', methods=['POST'])
+@app.route('/admin/reset_scores', methods=['POST'])
 @admin_required
 def admin_reset_scores():
-    """Reset all student scores (legacy marks only, keep QuizScore history)"""
+    """Reset all student scores"""
     try:
         # Fetch all non-admin users
         students = User.query.filter_by(is_admin=False).all()
         
-        # Reset their legacy marks to None (but keep QuizScore history)
+        # Reset their marks to None
         reset_count = 0
         for student in students:
             if student.marks is not None:
@@ -929,9 +722,9 @@ def admin_reset_scores():
         db.session.commit()
         
         if reset_count > 0:
-            flash(f'All student legacy scores have been reset. {reset_count} students can retake the quiz. (Quiz history preserved)', 'success')
+            flash(f'All student scores have been reset. {reset_count} students can now retake the quiz.', 'success')
         else:
-            flash('No legacy scores to reset - all students already have no scores.', 'info')
+            flash('No scores to reset - all students already have no scores.', 'info')
             
     except Exception as e:
         db.session.rollback()
@@ -1049,29 +842,26 @@ def admin_export_questions():
         flash(f'Error exporting questions: {str(e)}', 'error')
         return redirect(url_for('admin_questions'))
 
-@app.route('/admin/clear_all_scores', methods=['POST'])
+@app.route('/admin/reset_scores', methods=['POST'])
 @admin_required
 def admin_reset_all_scores():
-    """Delete all quiz scores and reset legacy marks (Complete reset)"""
+    """Delete all rows in QuizScore table (Clear student history)"""
     try:
-        # Delete all quiz scores from QuizScore table
+        # Delete all quiz scores
         deleted_count = QuizScore.query.delete()
         
-        # Also reset legacy marks for all students
+        # Also reset legacy marks for backward compatibility
         students = User.query.filter_by(is_admin=False).all()
-        reset_legacy_count = 0
         for student in students:
-            if student.marks is not None:
-                student.marks = None
-                reset_legacy_count += 1
+            student.marks = None
         
         db.session.commit()
         
-        flash(f'COMPLETE RESET: Deleted {deleted_count} quiz score records and reset {reset_legacy_count} legacy scores. All students can now retake the quiz.', 'success')
+        flash(f'All student history cleared. {deleted_count} score records deleted.', 'success')
         
     except Exception as e:
         db.session.rollback()
-        flash(f'Error clearing all scores: {str(e)}', 'error')
+        flash(f'Error clearing scores: {str(e)}', 'error')
     
     return redirect(url_for('admin_students'))
 

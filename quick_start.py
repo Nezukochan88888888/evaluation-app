@@ -28,14 +28,20 @@ def get_local_ip():
 
 def check_python_requirements():
     """Check if required modules are available"""
-    required_modules = ['flask', 'flask_sqlalchemy', 'flask_login', 'flask_admin', 'flask_wtf']
+    required_modules = {
+        'flask': 'flask',
+        'flask_sqlalchemy': 'flask_sqlalchemy', 
+        'flask_login': 'flask_login',
+        'flask_admin': 'flask_admin',
+        'flask_wtf': 'flask_wtf'
+    }
     missing = []
     
-    for module in required_modules:
+    for display_name, import_name in required_modules.items():
         try:
-            __import__(module.replace('_', '-'))
+            __import__(import_name)
         except ImportError:
-            missing.append(module)
+            missing.append(display_name)
     
     if missing:
         print(f"❌ Missing required modules: {', '.join(missing)}")
@@ -99,21 +105,30 @@ def print_banner():
 def print_access_info(local_ip, port=5000):
     """Print access information"""
     print(f"\n🚀 SERVER READY!")
-    print("-" * 30)
-    print(f"📱 Student Access: http://{local_ip}:{port}")
-    print(f"👨‍💼 Admin Dashboard: http://{local_ip}:{port}/admin_dashboard")
-    print(f"⚙️  Advanced Admin: http://{local_ip}:{port}/admin")
-    print(f"💻 Local Access: http://localhost:{port}")
-    print("-" * 30)
-    
-    print(f"\n📋 STUDENT INSTRUCTIONS:")
-    print(f"   1. Connect to the same WiFi network")
-    print(f"   2. Open browser and go to: http://{local_ip}:{port}")
-    print(f"   3. Register or login")
-    print(f"   4. Take the quiz!")
-    
-    print(f"\n⚠️  Press Ctrl+C to stop the server")
-    print("="*50)
+    print("="*60)
+    print(f"📱 STUDENT ACCESS:")
+    print(f"   🌐 WiFi URL: http://{local_ip}:{port}")
+    print(f"   💻 Local URL: http://localhost:{port}")
+    print("")
+    print(f"👨‍💼 ADMIN ACCESS:")
+    print(f"   📊 Dashboard: http://{local_ip}:{port}/admin_dashboard")
+    print(f"   👥 Students: http://{local_ip}:{port}/admin_students") 
+    print(f"   ❓ Questions: http://{local_ip}:{port}/admin_questions")
+    print(f"   ⚙️  Advanced: http://{local_ip}:{port}/admin")
+    print("")
+    print(f"📋 QUICK ADMIN GUIDE:")
+    print(f"   🏠 Admin Dashboard - View overview & quick actions")
+    print(f"   📊 Students Page - View scores, reset student progress")
+    print(f"   📝 Questions Page - Add/edit quiz questions")
+    print(f"   📤 Import Questions - Bulk upload via CSV/Excel")
+    print("")
+    print(f"📱 STUDENT SETUP:")
+    print(f"   1️⃣  Students connect to same WiFi network")
+    print(f"   2️⃣  Students open: http://{local_ip}:{port}")
+    print(f"   3️⃣  Students register/login and take quiz")
+    print("")
+    print(f"⚠️  Press Ctrl+C to stop the server")
+    print("="*60)
 
 def main():
     """Main startup function"""
@@ -139,8 +154,8 @@ def main():
     # Print access information
     print_access_info(local_ip)
     
-    # Open browser automatically
-    open_browser_delayed(f"http://localhost:5000", delay=2)
+    # Open admin dashboard automatically  
+    open_browser_delayed(f"http://localhost:5000/admin_dashboard", delay=3)
     
     # Start the Flask server
     try:
