@@ -157,6 +157,7 @@
     var form = document.getElementById('question-form');
     var timerAlert = document.getElementById('timer-alert');
     var submitBtn = document.getElementById('submit-btn');
+    var submitted = false; // Track submission state
     
     // Prevent going back to restart timer
     history.pushState(null, null, location.href);
@@ -176,6 +177,26 @@
             (e.ctrlKey && e.shiftKey && e.keyCode == 74) ||
             (e.ctrlKey && e.keyCode == 85)) {
             e.preventDefault();
+        }
+    });
+
+    // Anti-Cheat: Disqualify on tab switch or leaving page
+    function disqualifyUser() {
+        if (!submitted) {
+            // Use sendBeacon for reliable background transmission
+            navigator.sendBeacon("{{ url_for('disqualify_quiz') }}");
+        }
+    }
+
+    document.addEventListener('visibilitychange', function() {
+        if (document.hidden && !submitted) {
+            disqualifyUser();
+        }
+    });
+
+    window.addEventListener('pagehide', function() {
+        if (!submitted) {
+            disqualifyUser();
         }
     });
     
@@ -202,9 +223,10 @@
             submitBtn.innerHTML = '<i class="fas fa-clock"></i> Time Expired';
             
             // Auto-submit immediately
-            setTimeout(function() {
+            if (!submitted) {
+                submitted = true;
                 form.submit();
-            }, 500);
+            }
             return;
         } else if (remaining <= 10) {
             el.style.color = '#dc3545';
@@ -222,23 +244,23 @@
     }
     
     // Prevent form submission spam
-    var submitted = false;
     form.addEventListener('submit', function(e) {
         if (submitted) {
             e.preventDefault();
             return false;
         }
         
-        submitted = true;
+        submitted = true; // Mark as submitted to prevent anti-cheat trigger
         submitBtn.disabled = true;
         submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Submitting...';
     });
     
-    // Warning before leaving page
+    // Warning before leaving page (only if not disqualified/submitted)
     window.addEventListener('beforeunload', function(e) {
         if (!submitted && remaining > 0) {
+            // Note: Modern browsers might not show the custom message
             e.preventDefault();
-            e.returnValue = 'Are you sure you want to leave? Your progress will be lost.';
+            e.returnValue = 'Leaving this page will disqualify you from the quiz.';
         }
     });
     

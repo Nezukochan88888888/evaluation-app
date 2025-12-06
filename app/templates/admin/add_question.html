@@ -11,7 +11,7 @@
                     </h4>
                 </div>
                 <div class="card-body">
-                    <form method="POST" id="questionForm">
+                    <form method="POST" id="questionForm" enctype="multipart/form-data">
                         {{ form.hidden_tag() }}
                         
                         <!-- Question Text -->
@@ -196,10 +196,11 @@
 
 <script>
 function updateAnswerChoices() {
-    const a = document.getElementById('a').value;
-    const b = document.getElementById('b').value;
-    const c = document.getElementById('c').value;
-    const d = document.getElementById('d').value;
+    // Correct IDs matching the form fields
+    const a = document.getElementById('optionA').value;
+    const b = document.getElementById('optionB').value;
+    const c = document.getElementById('optionC').value;
+    const d = document.getElementById('optionD').value;
     const ansSelect = document.getElementById('ans');
     
     // Clear existing options
@@ -228,20 +229,36 @@ function updateAnswerChoices() {
 
 function updatePreview() {
     const question = document.getElementById('ques').value;
-    const a = document.getElementById('a').value;
-    const b = document.getElementById('b').value;
-    const c = document.getElementById('c').value;
-    const d = document.getElementById('d').value;
+    const a = document.getElementById('optionA').value;
+    const b = document.getElementById('optionB').value;
+    const c = document.getElementById('optionC').value;
+    const d = document.getElementById('optionD').value;
     const timeLimit = document.getElementById('time_limit').value;
     
-    if (question && a && b && c && d) {
+    // Check required fields based on what's visible/filled
+    const hasBasicFields = question && a && b;
+    const hasAllOptions = hasBasicFields && c && d;
+    const isTF = document.getElementById('questionType').value === 'TF';
+    
+    if ((isTF && hasBasicFields) || (!isTF && hasAllOptions)) {
         document.getElementById('previewQuestion').textContent = question;
         document.getElementById('previewA').textContent = `A: ${a}`;
         document.getElementById('previewB').textContent = `B: ${b}`;
-        document.getElementById('previewC').textContent = `C: ${c}`;
-        document.getElementById('previewD').textContent = `D: ${d}`;
+        document.getElementById('previewC').textContent = c ? `C: ${c}` : '';
+        document.getElementById('previewD').textContent = d ? `D: ${d}` : '';
         document.getElementById('previewTime').textContent = timeLimit || '60';
         document.getElementById('previewCard').style.display = 'block';
+        
+        // Hide C/D preview for TF
+        const previewCContainer = document.getElementById('previewC').parentElement;
+        const previewDContainer = document.getElementById('previewD').parentElement;
+        if (isTF) {
+            previewCContainer.style.display = 'none';
+            previewDContainer.style.display = 'none';
+        } else {
+            previewCContainer.style.display = 'block';
+            previewDContainer.style.display = 'block';
+        }
     } else {
         document.getElementById('previewCard').style.display = 'none';
     }
@@ -287,7 +304,8 @@ function handleQuestionTypeChange() {
 
 // Add event listeners
 document.addEventListener('DOMContentLoaded', function() {
-    ['ques', 'a', 'b', 'c', 'd', 'time_limit'].forEach(function(id) {
+    const ids = ['ques', 'optionA', 'optionB', 'optionC', 'optionD', 'time_limit'];
+    ids.forEach(function(id) {
         const element = document.getElementById(id);
         if (element) element.addEventListener('input', updatePreview);
     });

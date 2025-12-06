@@ -2,6 +2,7 @@
 
 {% block content %}
 <div class="container mt-4">
+    <form method="POST" action="{{ url_for('admin_delete_selected') }}" id="bulkDeleteForm" onsubmit="return confirmBulkDelete()">
     <div class="row">
         <div class="col-12">
             <div class="d-flex justify-content-between align-items-center mb-4">
@@ -13,11 +14,11 @@
             
             <!-- Bulk Actions -->
             <div class="d-flex justify-content-between align-items-center mb-3">
-                <form method="POST" action="{{ url_for('admin_delete_selected') }}" id="bulkDeleteForm" onsubmit="return confirmBulkDelete()">
+                <div>
                     <button type="submit" class="btn btn-danger" id="deleteSelectedBtn" disabled>
                         <i class="fas fa-trash"></i> Delete Selected (<span id="selectedCount">0</span>)
                     </button>
-                </form>
+                </div>
                 <small class="text-muted">
                     Total: {{ questions|length }} questions 
                     (MCQ: {{ questions|selectattr('question_type', 'equalto', 'MCQ')|list|length + questions|rejectattr('question_type')|list|length }}, 
@@ -57,7 +58,7 @@
                                     {% for question in questions %}
                                         <tr>
                                             <td>
-                                                <input type="checkbox" name="selected_questions" value="{{ question.q_id }}" class="question-checkbox">
+                                                <input type="checkbox" name="selected_questions" value="{{ question.q_id }}" class="question-checkbox" form="bulkDeleteForm">
                                             </td>
                                             <td>
                                                 <span class="badge badge-primary">{{ question.q_id }}</span>
@@ -220,7 +221,19 @@ function confirmBulkDelete() {
         return false;
     }
     
-    return confirm(`Are you sure you want to delete ${count} selected question(s)? This action cannot be undone.`);
+    if (confirm(`Are you sure you want to delete ${count} selected question(s)? This action cannot be undone.`)) {
+        // MANUAL FIX: Inject selected IDs into the form before submitting
+        const form = document.getElementById('bulkDeleteForm');
+        selectedCheckboxes.forEach(cb => {
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = 'selected_questions';
+            input.value = cb.value;
+            form.appendChild(input);
+        });
+        return true;
+    }
+    return false;
 }
 
 // Add event listeners to all question checkboxes

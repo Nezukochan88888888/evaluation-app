@@ -209,10 +209,46 @@ def register():
 
 
 
-def _get_first_and_last_question_ids():
-    first = db.session.query(db.func.min(Questions.q_id)).scalar()
-    last = db.session.query(db.func.max(Questions.q_id)).scalar()
-    return first, last
+@app.route('/disqualify_quiz', methods=['POST'])
+@login_required
+def disqualify_quiz():
+    """Disqualify user for cheating (tab switching/leaving)"""
+    if not session.get('quiz_started'):
+        return {'status': 'ignored'}
+        
+    current_category = session.get('current_category', 'General')
+    current_marks = session.get('marks', 0)
+    
+    # Create disqualified score record
+    quiz_score = QuizScore(
+        user_id=current_user.id,
+        score=current_marks,
+        quiz_category=current_category,
+        timestamp=datetime.utcnow(),
+        status='disqualified'
+    )
+    
+    try:
+        db.session.add(quiz_score)
+        db.session.commit()
+        
+        # Clear session completely
+        session.pop('quiz_started', None)
+        session.pop('answered_questions', None)
+        session.pop('marks', None)
+        session.pop('current_category', None)
+        session.pop('quiz_start_time', None)
+        
+        # Clear all timing data
+        keys_to_remove = [key for key in session.keys() if key.startswith('start_time_')]
+        for key in keys_to_remove:
+            session.pop(key, None)
+            
+        return {'status': 'disqualified'}
+    except Exception as e:
+        db.session.rollback()
+        return {'status': 'error', 'message': str(e)}
+
 
 @app.route('/start_quiz')
 @app.route('/start_quiz/<category>')
@@ -230,7 +266,10 @@ def start_quiz(category='General'):
     ).first()
     
     if existing_score:
-        flash(f'Quiz already completed with score: {existing_score.score}. No retakes allowed.', 'warning')
+        if existing_score.status == 'disqualified':
+            flash('You were disqualified for leaving the quiz screen. Retakes are not allowed.', 'error')
+        else:
+            flash(f'Quiz already completed with score: {existing_score.score}. No retakes allowed.', 'warning')
         return redirect(url_for('score'))
     
     # SECURITY: Check if user has any active quiz session - AUTO-RECORD INCOMPLETE QUIZ
@@ -777,6 +816,7 @@ def admin_add_question():
             
             # Save to question_images directory
             image_path = os.path.join(app.root_path, 'static', 'question_images', image_filename)
+            os.makedirs(os.path.dirname(image_path), exist_ok=True)
             image_file.save(image_path)
         
         # Get the next available question ID
@@ -870,6 +910,7 @@ def admin_edit_question(q_id):
             image_filename = f"{timestamp}_{filename}"
             
             image_path = os.path.join(app.root_path, 'static', 'question_images', image_filename)
+            os.makedirs(os.path.dirname(image_path), exist_ok=True)
             image_file.save(image_path)
             question.image_file = image_filename
         
@@ -1078,9 +1119,9 @@ def admin_delete_student(user_id):
 def admin_export_scores():
     """Export all student scores as CSV"""
     try:
-        # Query all non-admin users
+        # Query all non-admin users - Sorted Alphabetically (Case-Insensitive)
         students = User.query.filter_by(is_admin=False).order_by(
-            db.desc(db.func.coalesce(User.marks, 0))
+            db.func.lower(User.username).asc()
         ).all()
         
         # Create CSV in memory
@@ -1474,3 +1515,97 @@ def admin_analytics():
                          selected_category=selected_category,
                          stats=stats,
                          question_analytics=question_analytics)
+
+@app.route('/admin/analytics/export')
+@admin_required
+def admin_analytics_export():
+    """Export analytics data as CSV"""
+    from app.models import StudentResponse
+    
+    selected_category = request.args.get('category', '')
+    
+    # Get questions
+    questions_query = Questions.query
+    if selected_category:
+        questions_query = questions_query.filter_by(quiz_category=selected_category)
+    questions = questions_query.order_by(Questions.quiz_category, Questions.q_id).all()
+    
+    # Create CSV in memory
+    output = io.StringIO()
+    writer = csv.writer(output)
+    
+    # Write header
+    writer.writerow(['Question ID', 'Category', 'Question Text', 'Correct Answer', 'Total Responses', 'Success Rate', 'Correct Count', 'A Count', 'B Count', 'C Count', 'D Count'])
+    
+    for question in questions:
+        # Query responses for this question
+        response_query = StudentResponse.query.filter_by(question_id=question.q_id)
+        if selected_category:
+            response_query = response_query.filter_by(quiz_category=selected_category)
+        
+        responses = response_query.all()
+        
+        total_responses = len(responses)
+        correct_count = sum(1 for r in responses if r.is_correct)
+        success_rate = f"{(correct_count / total_responses) * 100:.1f}%" if total_responses > 0 else "0%"
+        
+        # Count choices
+        choice_counts = {
+            'A': sum(1 for r in responses if r.selected_answer == 'A'),
+            'B': sum(1 for r in responses if r.selected_answer == 'B'), 
+            'C': sum(1 for r in responses if r.selected_answer == 'C'),
+            'D': sum(1 for r in responses if r.selected_answer == 'D')
+        }
+        
+        writer.writerow([
+            question.q_id,
+            question.quiz_category,
+            question.ques,
+            question.ans,
+            total_responses,
+            success_rate,
+            correct_count,
+            choice_counts['A'],
+            choice_counts['B'],
+            choice_counts['C'],
+            choice_counts['D']
+        ])
+    
+    # Create response
+    csv_data = output.getvalue()
+    output.close()
+    
+    response = make_response(csv_data)
+    response.headers['Content-Type'] = 'text/csv'
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    filename = f'analytics_export_{selected_category}_{timestamp}.csv' if selected_category else f'analytics_export_all_{timestamp}.csv'
+    response.headers['Content-Disposition'] = f'attachment; filename={filename}'
+    
+    return response
+
+@app.route('/admin/analytics/reset', methods=['POST'])
+@admin_required
+def admin_analytics_reset():
+    """Reset analytics data (StudentResponse records)"""
+    from app.models import StudentResponse
+    
+    category = request.form.get('category')
+    
+    try:
+        if category:
+            # Delete only for specific category
+            deleted_count = StudentResponse.query.filter_by(quiz_category=category).delete()
+            msg = f'Analytics data for category "{category}" has been reset. ({deleted_count} records deleted)'
+        else:
+            # Delete all
+            deleted_count = StudentResponse.query.delete()
+            msg = f'All analytics data has been reset. ({deleted_count} records deleted)'
+            
+        db.session.commit()
+        flash(msg, 'success')
+        
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error resetting analytics data: {str(e)}', 'error')
+    
+    return redirect(url_for('admin_analytics', category=category if category else None))
