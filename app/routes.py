@@ -17,6 +17,7 @@ import io
 import secrets
 import time
 import os
+import random
 from datetime import datetime
 
 
@@ -324,14 +325,27 @@ def start_quiz(category='General'):
     session['quiz_start_time'] = time.time()  # Track when quiz was first started
     session.permanent = True  # Make session persistent across browser sessions
     
-    # Get first question in this category
-    first_question = Questions.query.filter_by(quiz_category=category).order_by(Questions.q_id.asc()).first()
-    if not first_question:
+    # Get all questions in this category
+    all_questions = Questions.query.filter_by(quiz_category=category).all()
+    if not all_questions:
         flash(f'No questions available in {category} category. Please contact your administrator.', 'error')
         return redirect(url_for('home'))
+        
+    # Student-Side Randomization: Shuffle question IDs if enabled for this student
+    question_ids = [q.q_id for q in all_questions]
+    
+    # Check user preference (default is False/Sequential)
+    if getattr(current_user, 'shuffle_questions', False):
+        random.shuffle(question_ids)
+        flash(f'Starting {category} quiz (Randomized).', 'info')
+    else:
+        # Sort sequentially by ID for standard order
+        question_ids.sort()
+        
+    session['question_queue'] = question_ids
     
     flash(f'Starting {category} quiz. WARNING: Leaving will auto-record your current score and end the quiz permanently.', 'warning')
-    return redirect(url_for('ready', q_id=first_question.q_id))
+    return redirect(url_for('ready', q_id=question_ids[0]))
 
 @app.route('/ready/<int:q_id>')
 @login_required
@@ -443,10 +457,15 @@ def question(id):
         # Clear the start time for this question
         session.pop(f'start_time_{id}', None)
         
-        # Move to next question or score
-        next_q = Questions.query.filter(Questions.q_id > id).order_by(Questions.q_id.asc()).first()
-        if next_q:
-            return redirect(url_for('ready', q_id=next_q.q_id))
+        # Move to next question in queue or score
+        queue = session.get('question_queue', [])
+        try:
+            current_index = queue.index(id)
+            if current_index + 1 < len(queue):
+                return redirect(url_for('ready', q_id=queue[current_index + 1]))
+        except ValueError:
+            pass
+            
         return redirect(url_for('score'))
 
     # Anti-cheating: Check if question was already answered
@@ -454,9 +473,15 @@ def question(id):
     if id in answered_questions:
         # Skip to next question if already answered
         session.pop(f'start_time_{id}', None)  # Clear timing
-        next_q = Questions.query.filter(Questions.q_id > id).order_by(Questions.q_id.asc()).first()
-        if next_q:
-            return redirect(url_for('ready', q_id=next_q.q_id))
+        
+        queue = session.get('question_queue', [])
+        try:
+            current_index = queue.index(id)
+            if current_index + 1 < len(queue):
+                return redirect(url_for('ready', q_id=queue[current_index + 1]))
+        except ValueError:
+            pass
+            
         return redirect(url_for('score'))
 
     # Handle form submission
@@ -501,14 +526,15 @@ def question(id):
         # Clear the timing session for this question
         session.pop(f'start_time_{id}', None)
         
-        # Go to the next question's ready screen in same category or score if finished
-        current_category = session.get('current_category', 'General')
-        next_q = Questions.query.filter(
-            Questions.q_id > id,
-            Questions.quiz_category == current_category
-        ).order_by(Questions.q_id.asc()).first()
-        if next_q:
-            return redirect(url_for('ready', q_id=next_q.q_id))
+        # Go to the next question's ready screen using the randomized queue
+        queue = session.get('question_queue', [])
+        try:
+            current_index = queue.index(id)
+            if current_index + 1 < len(queue):
+                return redirect(url_for('ready', q_id=queue[current_index + 1]))
+        except ValueError:
+            pass # Should not happen if flow is correct
+            
         return redirect(url_for('score'))
 
     # Prepare form for GET request
@@ -1048,7 +1074,8 @@ def admin_students():
             'quiz_status': latest_score.status if latest_score else ('Not Started' if not has_any_score else 'Legacy Score'),
             'quiz_category': latest_score.quiz_category if latest_score else None,
             'quiz_timestamp': latest_score.timestamp if latest_score else None,
-            'display_score': 'Not Started' if (latest_score is None and student.marks is None) else (latest_score.score if latest_score else student.marks)
+            'display_score': 'Not Started' if (latest_score is None and student.marks is None) else (latest_score.score if latest_score else student.marks),
+            'shuffle_questions': getattr(student, 'shuffle_questions', False)
         }
         enhanced_students.append(student_data)
     
@@ -1058,6 +1085,26 @@ def admin_students():
     return render_template('admin/students.html', 
                          title='Student Scores & Performance', 
                          students=enhanced_students)
+
+@app.route('/admin/toggle_shuffle/<int:user_id>', methods=['POST'])
+@admin_required
+def admin_toggle_shuffle(user_id):
+    """Toggle randomization setting for a student"""
+    student = User.query.filter_by(id=user_id, is_admin=False).first_or_404()
+    
+    # Toggle the setting
+    current_setting = getattr(student, 'shuffle_questions', False)
+    student.shuffle_questions = not current_setting
+    
+    try:
+        db.session.commit()
+        status_msg = "enabled" if student.shuffle_questions else "disabled"
+        flash(f'Randomization {status_msg} for student {student.username}', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error updating student: {str(e)}', 'error')
+        
+    return redirect(url_for('admin_students'))
 
 @app.route('/admin_reset_student_score/<int:user_id>', methods=['POST'])
 @admin_required

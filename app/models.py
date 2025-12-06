@@ -11,6 +11,7 @@ class User(UserMixin, db.Model):
     password_hash = db.Column(db.String(128))
     marks = db.Column(db.Integer, index=True)  # Keep for backward compatibility
     is_admin = db.Column(db.Boolean, default=False, nullable=False)
+    shuffle_questions = db.Column(db.Boolean, default=False, nullable=False) # Feature to randomize questions per student
     session_token = db.Column(db.String(128), index=True)
     
     # New relationship for quiz scores

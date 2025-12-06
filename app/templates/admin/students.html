@@ -93,9 +93,12 @@
                                         <th style="width: 80px;">Rank</th>
                                         <th>Username</th>
                                         <th>Email</th>
-                                        <th style="width: 120px;">Score</th>
+                                        <th style="width: 100px;">Score</th>
                                         <th style="width: 120px;">Status</th>
-                                        <th style="width: 150px;">Actions</th>
+                                        <th style="width: 120px;">Category</th>
+                                        <th style="width: 150px;">Date</th>
+                                        <th style="width: 120px;" class="text-center">Randomize</th>
+                                        <th style="width: 100px;">Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -129,11 +132,11 @@
                                             </td>
                                             <td>
                                                 {% if student.quiz_status == 'completed' %}
-                                                    <span class="badge badge-success">✅ Completed</span>
+                                                    <span class="badge badge-success">Completed</span>
                                                 {% elif student.quiz_status == 'incomplete' %}
-                                                    <span class="badge badge-warning">⚠️ Incomplete</span>
+                                                    <span class="badge badge-warning">Incomplete</span>
                                                 {% else %}
-                                                    <span class="badge badge-secondary">❌ Not Started</span>
+                                                    <span class="badge badge-secondary">Not Started</span>
                                                 {% endif %}
                                             </td>
                                             <td>
@@ -150,16 +153,22 @@
                                                     <span class="text-muted">-</span>
                                                 {% endif %}
                                             </td>
-                                            <td>
-                                                {% if student.quiz_score is not none and student.quiz_score > 0 %}
-                                                    <span class="badge badge-success">Completed</span>
-                                                {% else %}
-                                                    <span class="badge badge-warning">Not started</span>
-                                                {% endif %}
+                                            <td class="text-center">
+                                                <form action="{{ url_for('admin_toggle_shuffle', user_id=student.id) }}" method="POST" class="d-inline">
+                                                    {% if student.shuffle_questions %}
+                                                        <button type="submit" class="btn btn-sm btn-success" title="Randomization Enabled - Click to Disable">
+                                                            <i class="fas fa-random"></i> On
+                                                        </button>
+                                                    {% else %}
+                                                        <button type="submit" class="btn btn-sm btn-outline-secondary" title="Randomization Disabled - Click to Enable">
+                                                            <i class="fas fa-sort-numeric-down"></i> Off
+                                                        </button>
+                                                    {% endif %}
+                                                </form>
                                             </td>
                                             <td>
                                                 {% if student.quiz_score is not none and student.quiz_score > 0 %}
-                                                    <button type="button" class="btn btn-sm btn-outline-warning mr-1" 
+                                                    <button type="button" class="btn btn-sm btn-outline-warning" 
                                                             onclick="confirmReset('{{ student.username }}', {{ student.id }})" 
                                                             title="Reset Score">
                                                         <i class="fas fa-redo"></i>
