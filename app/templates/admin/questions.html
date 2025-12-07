@@ -12,13 +12,67 @@
                 </a>
             </div>
             
-            <!-- Bulk Actions -->
-            <div class="d-flex justify-content-between align-items-center mb-3">
-                <div>
-                    <button type="submit" class="btn btn-danger" id="deleteSelectedBtn" disabled>
-                        <i class="fas fa-trash"></i> Delete Selected (<span id="selectedCount">0</span>)
-                    </button>
+            <!-- Filter Section -->
+            <div class="card mb-3">
+                <div class="card-body py-2">
+                    <form action="{{ url_for('admin_questions') }}" method="GET" class="row align-items-center">
+                        <div class="col-auto">
+                            <label for="set_id" class="col-form-label fw-bold">Filter by Set:</label>
+                        </div>
+                        <div class="col-auto">
+                            <select name="set_id" id="set_id" class="form-select form-control" onchange="this.form.submit()">
+                                <option value="active" {% if current_set_filter == 'active' %}selected{% endif %}>Active Sets (Default)</option>
+                                <option value="all" {% if current_set_filter == 'all' %}selected{% endif %}>All Questions</option>
+                                <option disabled>──────────</option>
+                                <option value="none" {% if current_set_filter == 'none' %}selected{% endif %}>No Set Assigned</option>
+                                {% for s in question_sets %}
+                                    <option value="{{ s.id }}" {% if current_set_filter == s.id|string %}selected{% endif %}>
+                                        {{ s.quiz_category }} - {{ s.name }} 
+                                        {% if s.is_active %}(Active){% endif %}
+                                    </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-auto">
+                            {% if current_set_filter != 'active' %}
+                            <a href="{{ url_for('admin_questions') }}" class="btn btn-outline-secondary btn-sm">Reset to Active</a>
+                            {% endif %}
+                        </div>
+                    </form>
                 </div>
+            </div>
+            
+            <!-- Bulk Actions -->
+            <div class="card mb-3 bg-light">
+                <div class="card-body py-2">
+                    <div class="row align-items-center">
+                        <div class="col-auto">
+                            <strong>Bulk Actions:</strong>
+                        </div>
+                        <div class="col-auto">
+                            <form method="POST" action="{{ url_for('admin_assign_set') }}" id="bulkAssignForm" class="d-inline-flex align-items-center" onsubmit="return confirmBulkAssign()">
+                                <select name="target_set_id" class="form-select form-control form-control-sm mr-2" style="width: auto;">
+                                    <option value="">-- Assign to Set --</option>
+                                    <option value="none">Default (No Set)</option>
+                                    {% for s in question_sets %}
+                                        <option value="{{ s.id }}">{{ s.quiz_category }} - {{ s.name }}</option>
+                                    {% endfor %}
+                                </select>
+                                <button type="submit" class="btn btn-sm btn-info" id="assignSelectedBtn" disabled>
+                                    <i class="fas fa-exchange-alt"></i> Move
+                                </button>
+                            </form>
+                        </div>
+                        <div class="col-auto ml-auto">
+                            <button type="submit" class="btn btn-sm btn-danger" id="deleteSelectedBtn" form="bulkDeleteForm" disabled>
+                                <i class="fas fa-trash"></i> Delete Selected (<span id="selectedCount">0</span>)
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="d-flex justify-content-end mb-2">
                 <small class="text-muted">
                     Total: {{ questions|length }} questions 
                     (MCQ: {{ questions|selectattr('question_type', 'equalto', 'MCQ')|list|length + questions|rejectattr('question_type')|list|length }}, 
@@ -51,6 +105,7 @@
                                         <th style="width: 80px;">Points</th>
                                         <th style="width: 100px;">Time Limit</th>
                                         <th style="width: 120px;">Correct Answer</th>
+                                        <th style="width: 120px;">Set</th>
                                         <th style="width: 200px;">Actions</th>
                                     </tr>
                                 </thead>
@@ -102,6 +157,13 @@
                                             </td>
                                             <td>
                                                 <span class="badge badge-success">{{ question.ans }}</span>
+                                            </td>
+                                            <td>
+                                                {% if question.question_set %}
+                                                <span class="badge badge-info">{{ question.question_set.name }}</span>
+                                                {% else %}
+                                                <span class="badge badge-secondary">None</span>
+                                                {% endif %}
                                             </td>
                                             <td>
                                                 <div class="btn-group" role="group">
@@ -196,6 +258,7 @@ function updateSelectedCount() {
     
     document.getElementById('selectedCount').textContent = count;
     document.getElementById('deleteSelectedBtn').disabled = count === 0;
+    document.getElementById('assignSelectedBtn').disabled = count === 0;
     
     // Update select all checkbox state
     const allCheckboxes = document.querySelectorAll('.question-checkbox');
@@ -210,6 +273,27 @@ function updateSelectedCount() {
     } else {
         selectAllCheckbox.indeterminate = true;
     }
+}
+
+function confirmBulkAssign() {
+    const selectedCheckboxes = document.querySelectorAll('.question-checkbox:checked');
+    const count = selectedCheckboxes.length;
+    
+    if (count === 0) return false;
+    
+    // Inject selected IDs into the assign form
+    const form = document.getElementById('bulkAssignForm');
+    // Remove old hidden inputs if any
+    form.querySelectorAll('input[type="hidden"][name="selected_questions"]').forEach(el => el.remove());
+    
+    selectedCheckboxes.forEach(cb => {
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = 'selected_questions';
+        input.value = cb.value;
+        form.appendChild(input);
+    });
+    return true;
 }
 
 function confirmBulkDelete() {

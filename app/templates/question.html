@@ -14,7 +14,7 @@
                         </h5>
                     </div>
                     <div class="col-auto">
-                        <small class="text-muted">Question {{ q.q_id }} • Server-Side Timer Active</small>
+                        <small class="text-muted">Question {{ current_question }} • Server-Side Timer Active</small>
                     </div>
                 </div>
             </div>
@@ -24,7 +24,7 @@
                 <div class="card-header bg-primary text-white">
                     <div class="row align-items-center">
                         <div class="col">
-                            <h4 class="mb-0">Question {{ q.q_id }}</h4>
+                            <h4 class="mb-0">Question {{ current_question }}</h4>
                         </div>
                         <div class="col-auto">
                             <span class="badge badge-light">{{ current_question }} of {{ total_questions }}</span>

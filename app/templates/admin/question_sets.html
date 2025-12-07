@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-4">
+    <h2>Manage Question Sets (Exams)</h2>
+    <p class="lead">Create and manage different exam versions for your classes. <br>
+    <small class="text-muted">Only one set per category can be "Active" at a time.</small>
+    </p>
+
+    <div class="card mb-4">
+        <div class="card-header bg-primary text-white">
+            <h5 class="mb-0">Create New Question Set</h5>
+        </div>
+        <div class="card-body">
+            <form action="{{ url_for('admin_add_question_set') }}" method="POST" class="row g-3 align-items-end">
+                <div class="col-md-3">
+                    <label for="name" class="form-label">Set Name</label>
+                    <input type="text" class="form-control" id="name" name="name" placeholder="e.g. Midterm A" required>
+                </div>
+                <div class="col-md-3">
+                    <label for="category" class="form-label">Category / Section</label>
+                    <input type="text" class="form-control" id="category" name="category" list="categoryList" placeholder="Select or type..." required>
+                    <datalist id="categoryList">
+                        {% for cat in categories %}
+                        <option value="{{ cat }}">
+                        {% endfor %}
+                    </datalist>
+                </div>
+                <div class="col-md-4">
+                    <label for="description" class="form-label">Description (Optional)</label>
+                    <input type="text" class="form-control" id="description" name="description" placeholder="Notes...">
+                </div>
+                <div class="col-md-2">
+                    <button type="submit" class="btn btn-success w-100">Create Set</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header">
+            <h5 class="mb-0">Existing Question Sets</h5>
+        </div>
+        <div class="card-body">
+            {% if sets %}
+            <div class="table-responsive">
+                <table class="table table-hover align-middle">
+                    <thead>
+                        <tr>
+                            <th>Category</th>
+                            <th>Set Name</th>
+                            <th>Description</th>
+                            <th>Questions</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for s in sets %}
+                        <tr class="{{ 'table-success' if s.is_active else '' }}">
+                            <td><strong>{{ s.quiz_category }}</strong></td>
+                            <td>{{ s.name }}</td>
+                            <td>{{ s.description or '-' }}</td>
+                            <td>
+                                <span class="badge bg-secondary">{{ s.questions.count() }} Questions</span>
+                            </td>
+                            <td>
+                                {% if s.is_active %}
+                                <span class="badge bg-success">ACTIVE</span>
+                                {% else %}
+                                <span class="badge bg-secondary">Inactive</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <div class="btn-group" role="group">
+                                    <form action="{{ url_for('admin_toggle_question_set', id=s.id) }}" method="POST" class="d-inline">
+                                        {% if s.is_active %}
+                                        <button type="submit" class="btn btn-sm btn-warning" title="Deactivate">
+                                            Deactivate
+                                        </button>
+                                        {% else %}
+                                        <button type="submit" class="btn btn-sm btn-success" title="Activate this set">
+                                            Activate
+                                        </button>
+                                        {% endif %}
+                                    </form>
+                                    
+                                    <form action="{{ url_for('admin_delete_question_set', id=s.id) }}" method="POST" class="d-inline ms-1" onsubmit="return confirm('Are you sure? This will fail if the set has questions.');">
+                                        <button type="submit" class="btn btn-sm btn-danger">Delete</button>
+                                    </form>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="alert alert-info">No question sets created yet. Create one above to get started.</div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

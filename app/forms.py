@@ -49,6 +49,7 @@ class AdminQuestionForm(FlaskForm):
     
     ans = SelectField('Correct Answer', validators=[DataRequired()], choices=[])
     quiz_category = StringField('Quiz Category', validators=[DataRequired()], default='General')
+    question_set_id = SelectField('Question Set', coerce=int, validators=[Optional()], choices=[]) # Added
     time_limit = IntegerField('Time Limit (seconds)', validators=[DataRequired(), NumberRange(min=10, max=600)], default=60)
     
     # Image upload field

@@ -24,33 +24,19 @@
         </div>
     </div>
 
-    <!-- Category Selection -->
+    <!-- Context Info -->
     <div class="row mb-4">
         <div class="col-12">
-            <div class="card">
-                <div class="card-header">
-                    <h5 class="mb-0">Select Quiz Category for Analysis</h5>
-                </div>
-                <div class="card-body">
-                    <form method="GET" action="{{ url_for('admin_analytics') }}">
-                        <div class="row">
-                            <div class="col-md-6">
-                                <select name="category" class="form-control" onchange="this.form.submit()">
-                                    <option value="">All Categories</option>
-                                    {% for cat in categories %}
-                                        <option value="{{ cat }}" {% if cat == selected_category %}selected{% endif %}>
-                                            {{ cat }}
-                                        </option>
-                                    {% endfor %}
-                                </select>
-                            </div>
-                            <div class="col-md-6">
-                                <div class="text-muted">
-                                    <small>Selected: <strong>{{ selected_category or 'All Categories' }}</strong></small>
-                                </div>
-                            </div>
-                        </div>
-                    </form>
+            <div class="alert alert-info d-flex justify-content-between align-items-center">
+                <div>
+                    <strong><i class="fas fa-layer-group"></i> Class Section:</strong> {{ selected_category }}
+                    <span class="mx-3">|</span>
+                    <strong><i class="fas fa-file-alt"></i> Active Exam:</strong> 
+                    {% if active_set_obj %}
+                        <span class="badge badge-success">{{ active_set_obj.name }}</span>
+                    {% else %}
+                        <span class="badge badge-warning">No Active Set</span>
+                    {% endif %}
                 </div>
             </div>
         </div>

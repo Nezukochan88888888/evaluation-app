@@ -7,10 +7,33 @@ from datetime import datetime
 class Section(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(64), unique=True, nullable=False)
+    is_active = db.Column(db.Boolean, default=True, nullable=False)
     students = db.relationship('User', backref='section_rel', lazy='dynamic')
 
     def __repr__(self):
         return '<Section {}>'.format(self.name)
+
+
+class QuestionSet(db.Model):
+    """
+    Represents a specific set of questions (e.g., "Midterm", "Finals") 
+    within a broader category (Section).
+    Only one set per category should be active at a time for students.
+    """
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False)  # e.g., "Exam Set A", "Practice Quiz"
+    quiz_category = db.Column(db.String(64), nullable=False)  # Links to User.section or Questions.quiz_category
+    is_active = db.Column(db.Boolean, default=False)
+    description = db.Column(db.String(255))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    # Relationships
+    questions = db.relationship('Questions', backref='question_set', lazy='dynamic')
+    scores = db.relationship('QuizScore', backref='question_set', lazy='dynamic')
+    responses = db.relationship('StudentResponse', backref='question_set', lazy='dynamic')
+
+    def __repr__(self):
+        return '<QuestionSet {} ({}) Active={}>'.format(self.name, self.quiz_category, self.is_active)
 
 
 class User(UserMixin, db.Model):
@@ -54,6 +77,9 @@ class Questions(db.Model):
     time_limit = db.Column(db.Integer, default=60, nullable=False)
     quiz_category = db.Column(db.String(64), default='General', nullable=False)
     
+    # Link to a specific Question Set
+    question_set_id = db.Column(db.Integer, db.ForeignKey('question_set.id'), nullable=True)
+
     # Enhanced Educational Content fields
     rationalization = db.Column(db.Text)  # Explanation of the correct answer
     points = db.Column(db.Integer, default=1, nullable=False)  # Weight for harder questions
@@ -72,6 +98,7 @@ class QuizScore(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     quiz_category = db.Column(db.String(64), nullable=False)
+    question_set_id = db.Column(db.Integer, db.ForeignKey('question_set.id'), nullable=True) # Track which set was taken
     score = db.Column(db.Integer, nullable=False)
     timestamp = db.Column(db.DateTime, default=datetime.utcnow)
     status = db.Column(db.String(20), nullable=False, default='completed')  # 'completed' or 'incomplete'
@@ -90,6 +117,7 @@ class StudentResponse(db.Model):
     selected_answer = db.Column(db.String(1), nullable=False)  # 'A', 'B', 'C', or 'D'
     is_correct = db.Column(db.Boolean, nullable=False)
     quiz_category = db.Column(db.String(64), nullable=False)
+    question_set_id = db.Column(db.Integer, db.ForeignKey('question_set.id'), nullable=True)
     timestamp = db.Column(db.DateTime, default=datetime.utcnow)
     
     # Define the relationship from the StudentResponse side with proper cascade

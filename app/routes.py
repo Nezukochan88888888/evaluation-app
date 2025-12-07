@@ -6,7 +6,7 @@ except ImportError:
     from urllib.parse import urlparse as url_parse
 from werkzeug.utils import secure_filename
 from app.forms import LoginForm, RegistrationForm, QuestionForm, AdminQuestionForm, EditQuestionForm
-from app.models import User, Questions, QuizScore, Section
+from app.models import User, Questions, QuizScore, Section, QuestionSet, StudentResponse
 from sqlalchemy import desc
 from flask_login import current_user, login_user, logout_user, login_required
 from flask_admin.contrib.sqla import ModelView
@@ -31,6 +31,24 @@ def admin_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
+def get_active_question_set(category):
+    """
+    Helper to find the currently active QuestionSet for a given category.
+    Returns None if no active set is found.
+    """
+    # 1. Try to find a set marked as active
+    active_set = QuestionSet.query.filter_by(quiz_category=category, is_active=True).first()
+    
+    if active_set:
+        return active_set
+        
+    # 2. Fallback: If only one set exists, use it (even if not explicitly active? No, safer to require active)
+    # But for backward compatibility with the migration we just did, we marked "Standard Set" as active.
+    
+    # If no set is active, return None
+    return None
+
+
 
 class SecureModelView(ModelView):
     def is_accessible(self):
@@ -50,32 +68,76 @@ class BulkUploadView(BaseView):
             if not file:
                 flash('No file uploaded', 'error')
                 return redirect(request.url)
-            stream = io.StringIO(file.stream.read().decode('utf-8-sig'))
-            reader = csv.DictReader(stream)
-            created = []
-            for row in reader:
-                username = row.get('username')
-                email = row.get('email')
-                if not username or not email:
-                    continue
-                if User.query.filter((User.username==username)|(User.email==email)).first():
-                    continue
-                password = secrets.token_urlsafe(8)
-                user = User(username=username, email=email)
-                user.set_password(password)
-                db.session.add(user)
-                created.append((username, email, password))
-            db.session.commit()
-            for u, e, p in created:
-                flash(f"Created user {u} ({e}) with password: {p}")
-            if not created:
-                flash('No new users were created (possibly duplicates).')
+            
+            try:
+                stream = io.StringIO(file.stream.read().decode('utf-8-sig'))
+                reader = csv.DictReader(stream)
+                
+                # Normalize headers
+                if reader.fieldnames:
+                    reader.fieldnames = [name.strip().lower() for name in reader.fieldnames]
+                
+                created = []
+                active_section_name_from_session = session.get('active_section_name')
+                
+                for row in reader:
+                    username = row.get('username')
+                    email = row.get('email')
+                    
+                    if not username or not email:
+                        continue
+                        
+                    # Determine section name to use for the user
+                    csv_section_name = row.get('section', '').strip()
+                    final_section_name = 'Default' 
+                    
+                    if csv_section_name:
+                        final_section_name = csv_section_name
+                    elif active_section_name_from_session and active_section_name_from_session != 'All Classes':
+                        final_section_name = active_section_name_from_session
+                        
+                    # Check if user exists
+                    if User.query.filter((User.username==username)|(User.email==email)).first():
+                        continue
+                        
+                    password = secrets.token_urlsafe(8)
+                    user = User(username=username, email=email, section=final_section_name)
+                    
+                    # Link to Section model via FK
+                    if final_section_name != 'Default':
+                        # Try to find existing section in DB
+                        section_obj = Section.query.filter_by(name=final_section_name).first()
+                        if not section_obj:
+                            # If not found, create new Section entry
+                            section_obj = Section(name=final_section_name, is_active=True) 
+                            db.session.add(section_obj)
+                            db.session.flush() # Assign an ID before commit
+                        user.section_id = section_obj.id
+                        
+                    user.set_password(password)
+                    db.session.add(user)
+                    created.append((username, email, password, final_section_name))
+                    
+                db.session.commit()
+                for u, e, p, s in created:
+                    flash(f"Created user {u} ({e}) in '{s}' with password: {p}")
+                if not created:
+                    flash('No new users were created (possibly duplicates).')
+                    
+            except Exception as e:
+                db.session.rollback()
+                flash(f'Error processing file: {e}', 'error')
+                
             return redirect(request.url)
         return self.render('admin/bulk_upload.html')
 
 from wtforms import FileField
 
 class SectionModelView(SecureModelView):
+    column_list = ('name', 'is_active')
+    column_labels = {'is_active': 'Active (Allow Login)'}
+    form_columns = ('name', 'is_active', 'student_csv')
+    
     form_extra_fields = {
         'student_csv': FileField('Bulk Add Students (CSV)', 
                                description='Optional: Upload a CSV with "username" and "email" columns to automatically add students to this section.')
@@ -192,7 +254,22 @@ def home():
         else:
             # Student home view
             user_score = current_user.marks or 0
-            question_count = Questions.query.count()
+            
+            # Count questions available to this student based on Active Set logic
+            category = 'General'
+            if current_user.section and current_user.section not in ['Default', 'General']:
+                if get_active_question_set(current_user.section):
+                    category = current_user.section
+            
+            active_set = get_active_question_set(category)
+            
+            if active_set:
+                # Count questions in the active set
+                question_count = Questions.query.filter_by(question_set_id=active_set.id).count()
+            else:
+                # Fallback: Count all questions in category (Legacy behavior)
+                question_count = Questions.query.filter_by(quiz_category=category).count()
+            
             has_taken_quiz = current_user.marks is not None and current_user.marks > 0
             
             # Get user rank if they've taken the quiz
@@ -256,6 +333,23 @@ def login():
         # Generate new session token for single device login
         session_token = secrets.token_urlsafe(32)
         user.session_token = session_token
+        
+        # SECURITY: Check if user's section is active (Strict Section Mode)
+        if not user.is_admin:
+            # Determine user's section object
+            user_section = None
+            if user.section_id:
+                # Use relationship if linked
+                user_section = user.section_rel
+            elif user.section:
+                # Fallback to string match for legacy users
+                user_section = Section.query.filter_by(name=user.section).first()
+            
+            # If section exists and is marked inactive, block login
+            if user_section and not user_section.is_active:
+                flash('Your class section is currently inactive. Please contact your teacher.', 'warning')
+                return redirect(url_for('login'))
+
         db.session.commit()
         
         login_user(user)
@@ -299,12 +393,14 @@ def disqualify_quiz():
         
     current_category = session.get('current_category', 'General')
     current_marks = session.get('marks', 0)
+    current_set_id = session.get('question_set_id')
     
     # Create disqualified score record
     quiz_score = QuizScore(
         user_id=current_user.id,
         score=current_marks,
         quiz_category=current_category,
+        question_set_id=current_set_id,
         timestamp=datetime.utcnow(),
         status='disqualified'
     )
@@ -318,6 +414,7 @@ def disqualify_quiz():
         session.pop('answered_questions', None)
         session.pop('marks', None)
         session.pop('current_category', None)
+        session.pop('question_set_id', None)
         session.pop('quiz_start_time', None)
         
         # Clear all timing data
@@ -335,22 +432,37 @@ def disqualify_quiz():
 @app.route('/start_quiz/<category>')
 @login_required
 def start_quiz(category='General'):
-    """Initialize quiz session for a specific category"""
+    """Initialize quiz session for a specific category and active question set"""
     if current_user.is_admin:
         flash('Admins cannot take the quiz. Please use a student account.', 'warning')
         return redirect(url_for('admin_dashboard'))
     
-    # SECURITY: Check if user already has a completed score for this category
+    # Auto-detect category from user section if default is used
+    # This allows students in "Euclid" to automatically get "Euclid" quizzes
+    if category == 'General' and current_user.section and current_user.section not in ['Default', 'General']:
+        # Verify if questions/sets exist for this section, otherwise fall back to General
+        # We check for an active set for this section
+        if get_active_question_set(current_user.section):
+            category = current_user.section
+    
+    # DETERMINE ACTIVE QUESTION SET
+    active_set = get_active_question_set(category)
+    if not active_set:
+        flash(f'No active quiz currently available for {category}. Please contact your instructor.', 'error')
+        return redirect(url_for('home'))
+        
+    # SECURITY: Check if user already has a completed score for this SPECIFIC SET
     existing_score = QuizScore.query.filter_by(
         user_id=current_user.id, 
-        quiz_category=category
+        quiz_category=category,
+        question_set_id=active_set.id  # Check specific set
     ).first()
     
     if existing_score:
         if existing_score.status == 'disqualified':
             flash('You were disqualified for leaving the quiz screen. Retakes are not allowed.', 'error')
         else:
-            flash(f'Quiz already completed with score: {existing_score.score}. No retakes allowed.', 'warning')
+            flash(f'Quiz ({active_set.name}) already completed with score: {existing_score.score}. No retakes allowed.', 'warning')
         return redirect(url_for('score'))
     
     # SECURITY: Check if user has any active quiz session - AUTO-RECORD INCOMPLETE QUIZ
@@ -358,12 +470,14 @@ def start_quiz(category='General'):
         # Auto-record the incomplete quiz with current score
         current_category = session.get('current_category', 'General')
         current_marks = session.get('marks', 0)
+        current_set_id = session.get('question_set_id')
         
         # Create quiz score record for incomplete quiz
         quiz_score = QuizScore(
             user_id=current_user.id,
             score=current_marks,
             quiz_category=current_category,
+            question_set_id=current_set_id,
             timestamp=datetime.utcnow(),
             status='incomplete'  # Mark as incomplete
         )
@@ -381,6 +495,7 @@ def start_quiz(category='General'):
         session.pop('answered_questions', None)
         session.pop('marks', None)
         session.pop('current_category', None)
+        session.pop('question_set_id', None) # Clear set ID
         session.pop('quiz_start_time', None)
         
         # Clear all timing data
@@ -388,10 +503,11 @@ def start_quiz(category='General'):
         for key in keys_to_remove:
             session.pop(key, None)
         
-        # Now check if they already have a score for the requested category
+        # Now check if they already have a score for the requested set (again, just in case)
         existing_score = QuizScore.query.filter_by(
             user_id=current_user.id, 
-            quiz_category=category
+            quiz_category=category,
+            question_set_id=active_set.id
         ).first()
         
         if existing_score:
@@ -402,13 +518,17 @@ def start_quiz(category='General'):
     session['answered_questions'] = []
     session['quiz_started'] = True
     session['current_category'] = category
+    session['question_set_id'] = active_set.id  # Store the active set ID
     session['quiz_start_time'] = time.time()  # Track when quiz was first started
     session.permanent = True  # Make session persistent across browser sessions
     
-    # Get all questions in this category
-    all_questions = Questions.query.filter_by(quiz_category=category).all()
+    # Get all questions in this SPECIFIC SET
+    all_questions = Questions.query.filter_by(question_set_id=active_set.id).all()
+    
     if not all_questions:
-        flash(f'No questions available in {category} category. Please contact your administrator.', 'error')
+        # Fallback: check if there are legacy questions with this category but no set ID? 
+        # (Should cover by migration, but just in case)
+        flash(f'No questions found in {category} ({active_set.name}). Please contact your administrator.', 'error')
         return redirect(url_for('home'))
         
     # Student-Side Randomization: Shuffle question IDs if enabled for this student
@@ -417,14 +537,14 @@ def start_quiz(category='General'):
     # Check user preference (default is False/Sequential)
     if getattr(current_user, 'shuffle_questions', False):
         random.shuffle(question_ids)
-        flash(f'Starting {category} quiz (Randomized).', 'info')
+        flash(f'Starting {category} - {active_set.name} (Randomized).', 'info')
     else:
         # Sort sequentially by ID for standard order
         question_ids.sort()
         
     session['question_queue'] = question_ids
     
-    flash(f'Starting {category} quiz. WARNING: Leaving will auto-record your current score and end the quiz permanently.', 'warning')
+    flash(f'Starting {category}: {active_set.name}. WARNING: Leaving will auto-record your current score and end the quiz permanently.', 'warning')
     return redirect(url_for('ready', q_id=question_ids[0]))
 
 @app.route('/ready/<int:q_id>')
@@ -446,7 +566,10 @@ def ready(q_id):
         return redirect(url_for('start_quiz'))
     
     # Calculate progress
-    total_questions = Questions.query.count()
+    # Use the session queue length for accurate total count
+    question_queue = session.get('question_queue', [])
+    total_questions = len(question_queue) if question_queue else Questions.query.count()
+    
     answered_questions = session.get('answered_questions', [])
     current_question_number = len(answered_questions) + 1
     
@@ -498,16 +621,23 @@ def question(id):
     if not session.get('quiz_started'):
         return redirect(url_for('start_quiz'))
     
-    # Get current category
+    # Get current category and set
     current_category = session.get('current_category', 'General')
+    current_set_id = session.get('question_set_id')
     
-    # Get the question in current category
-    q = Questions.query.filter_by(q_id=id, quiz_category=current_category).first()
+    # Get the question in current category AND set
+    q = Questions.query.filter_by(q_id=id, question_set_id=current_set_id).first()
+    
     if not q:
-        # If this ID is missing, jump to the next available question in this category
+        # Fallback: check query without set ID if set ID is missing (legacy)
+        if not current_set_id:
+             q = Questions.query.filter_by(q_id=id, quiz_category=current_category).first()
+
+    if not q:
+        # If this ID is missing, jump to the next available question in this set
         next_q = Questions.query.filter(
             Questions.q_id > id, 
-            Questions.quiz_category == current_category
+            Questions.question_set_id == current_set_id
         ).order_by(Questions.q_id.asc()).first()
         if next_q:
             return redirect(url_for('ready', q_id=next_q.q_id))
@@ -589,7 +719,8 @@ def question(id):
             question_id=q.q_id,
             selected_answer=option,  # This will be 'A', 'B', 'C', or 'D' format from form
             is_correct=is_correct,
-            quiz_category=current_category
+            quiz_category=current_category,
+            question_set_id=current_set_id # Track the set
         )
         db.session.add(response)
         db.session.commit()  # Commit immediately to ensure data is saved
@@ -633,7 +764,10 @@ def question(id):
         form.options.choices = choices
     
     # Calculate progress
-    total_questions = Questions.query.count()
+    # Use the session queue length for accurate total count
+    question_queue = session.get('question_queue', [])
+    total_questions = len(question_queue) if question_queue else Questions.query.count()
+    
     current_question_number = len(answered_questions) + 1
     
     return render_template('question.html', 
@@ -658,17 +792,20 @@ def score():
     if session.get('quiz_started'):
         final_score = session.get('marks', 0)
         current_category = session.get('current_category', 'General')
+        current_set_id = session.get('question_set_id')
         
         # Save to new QuizScore table
         quiz_score = QuizScore(
             user_id=current_user.id,
             quiz_category=current_category,
+            question_set_id=current_set_id,
             score=final_score,
             status='completed'  # Mark as properly completed
         )
         db.session.add(quiz_score)
         
         # Also update legacy marks field for backward compatibility
+        # NOTE: Legacy 'marks' only stores ONE score, so it will be overwritten by the latest exam.
         current_user.marks = final_score
         
         try:
@@ -681,6 +818,7 @@ def score():
         session.pop('answered_questions', None)
         session.pop('marks', None)
         session.pop('current_category', None)
+        session.pop('question_set_id', None)
         session.pop('quiz_start_time', None)
         
         # Clear all individual question timing data
@@ -688,11 +826,14 @@ def score():
         for key in keys_to_remove:
             session.pop(key, None)
         
-        # Get total possible score for this category (1 point per question)
-        total_questions = Questions.query.filter_by(quiz_category=current_category).count()
+        # Get total possible score for this SET (based on actual questions in queue)
+        question_queue = session.get('question_queue', [])
+        total_questions = len(question_queue)
+            
         max_possible_score = total_questions * 1
         
-        # Get user's rank
+        # Get user's rank (Global rank? Or Set rank?)
+        # Let's keep global rank based on 'marks' for simplicity, or we'd need complex queries
         better_scores = User.query.filter(
             User.marks > final_score,
             User.is_admin == False
@@ -707,10 +848,13 @@ def score():
         # MODULE 4: Get questions student got wrong for feedback
         missed_questions = []
         if session.get('answered_questions'):
-            answered_q_ids = session.get('answered_questions', [])
+            # answered_q_ids = session.get('answered_questions', [])
             
-            # Get all questions in current category to determine which were missed
-            all_questions = Questions.query.filter_by(quiz_category=current_category).order_by(Questions.q_id).all()
+            # Get all questions in current SET to determine which were missed
+            if current_set_id:
+                 all_questions = Questions.query.filter_by(question_set_id=current_set_id).order_by(Questions.q_id).all()
+            else:
+                 all_questions = Questions.query.filter_by(quiz_category=current_category).order_by(Questions.q_id).all()
             
             # Simulate which questions were answered incorrectly based on final score
             # Since we don't store individual answers, we'll estimate based on performance
@@ -749,11 +893,13 @@ def auto_record_quiz():
     # Get current quiz data
     current_category = session.get('current_category', 'General')
     current_marks = session.get('marks', 0)
+    current_set_id = session.get('question_set_id')
     
     # Check if already recorded
     existing_score = QuizScore.query.filter_by(
         user_id=current_user.id,
-        quiz_category=current_category
+        quiz_category=current_category,
+        question_set_id=current_set_id
     ).first()
     
     if existing_score:
@@ -764,6 +910,7 @@ def auto_record_quiz():
         user_id=current_user.id,
         score=current_marks,
         quiz_category=current_category,
+        question_set_id=current_set_id,
         timestamp=datetime.utcnow(),
         status='incomplete'  # Mark as incomplete/abandoned
     )
@@ -777,6 +924,7 @@ def auto_record_quiz():
         session.pop('answered_questions', None)
         session.pop('marks', None)
         session.pop('current_category', None)
+        session.pop('question_set_id', None)
         session.pop('quiz_start_time', None)
         
         # Clear all timing data
@@ -807,11 +955,13 @@ def logout():
     if session.get('quiz_started') and not current_user.is_admin:
         current_category = session.get('current_category', 'General')
         current_marks = session.get('marks', 0)
+        current_set_id = session.get('question_set_id')
         
         # Check if not already recorded
         existing_score = QuizScore.query.filter_by(
             user_id=current_user.id,
-            quiz_category=current_category
+            quiz_category=current_category,
+            question_set_id=current_set_id
         ).first()
         
         if not existing_score:
@@ -819,6 +969,7 @@ def logout():
                 user_id=current_user.id,
                 score=current_marks,
                 quiz_category=current_category,
+                question_set_id=current_set_id,
                 timestamp=datetime.utcnow(),
                 status='incomplete'
             )
@@ -837,6 +988,7 @@ def logout():
     session.pop('quiz_started', None)
     session.pop('answered_questions', None)
     session.pop('current_category', None)
+    session.pop('question_set_id', None)
     session.pop('quiz_start_time', None)
     
     # Clear all individual question timing data
@@ -883,9 +1035,40 @@ def admin_dashboard():
 @app.route('/admin_questions')
 @admin_required
 def admin_questions():
-    """View all questions"""
-    questions = Questions.query.order_by(Questions.q_id.asc()).all()
-    return render_template('admin/questions.html', title='Manage Questions', questions=questions)
+    """View questions with filtering options. Defaults to showing ACTIVE sets only."""
+    # Get filters from query parameters
+    set_filter = request.args.get('set_id', 'active') # Default to 'active' context
+    
+    # Base query
+    query = Questions.query
+    
+    if set_filter == 'active':
+        # Show questions that are in an Active Set OR have no set (Legacy)
+        # Using outerjoin to include questions with NULL question_set_id
+        from sqlalchemy import or_
+        query = query.outerjoin(QuestionSet).filter(
+            or_(QuestionSet.is_active == True, Questions.question_set_id == None)
+        )
+    elif set_filter == 'all':
+        # Show everything - no filter
+        pass 
+    elif set_filter and set_filter.isdigit():
+        # Specific Set
+        query = query.filter_by(question_set_id=int(set_filter))
+    elif set_filter == 'none':
+        # Explicitly no set
+        query = query.filter(Questions.question_set_id.is_(None))
+        
+    questions = query.order_by(Questions.q_id.asc()).all()
+    
+    # Get all Question Sets for the filter dropdown
+    question_sets = QuestionSet.query.order_by(QuestionSet.quiz_category, QuestionSet.name).all()
+    
+    return render_template('admin/questions.html', 
+                         title='Manage Questions', 
+                         questions=questions,
+                         question_sets=question_sets,
+                         current_set_filter=set_filter)
 
 @app.route('/admin/questions/')
 @app.route('/admin/questions')
@@ -899,6 +1082,20 @@ def admin_questions_redirect():
 def admin_add_question():
     """Add a new question with support for different question types and image uploads"""
     form = AdminQuestionForm()
+    
+    # Populate Question Set choices
+    all_sets = QuestionSet.query.order_by(QuestionSet.quiz_category, QuestionSet.name).all()
+    form.question_set_id.choices = [(s.id, f"{s.quiz_category} - {s.name}") for s in all_sets]
+    
+    # Optional: Add a "None" or "Default" option if needed, though we prefer linking to a set
+    if not all_sets:
+        form.question_set_id.choices = [(-1, 'No Question Sets Created')]
+    
+    # Auto-select the active set for "General" (or the default category) if this is a GET request
+    if request.method == 'GET' and not form.question_set_id.data:
+        active_general_set = get_active_question_set('General')
+        if active_general_set:
+            form.question_set_id.data = active_general_set.id
     
     if request.method == 'POST':
         # Handle different question types for answer choices
@@ -942,6 +1139,10 @@ def admin_add_question():
         c_value = None if form.question_type.data == 'TF' else form.c.data
         d_value = None if form.question_type.data == 'TF' else form.d.data
         
+        # Handle set ID
+        q_set_id = form.question_set_id.data
+        if q_set_id == -1: q_set_id = None # Handle no sets case
+        
         question = Questions(
             q_id=new_q_id,
             ques=form.ques.data,
@@ -951,6 +1152,7 @@ def admin_add_question():
             d=d_value,
             ans=form.ans.data,
             quiz_category=form.quiz_category.data,
+            question_set_id=q_set_id, # Save the set ID
             time_limit=form.time_limit.data,
             rationalization=form.rationalization.data,
             points=form.points.data,
@@ -974,6 +1176,10 @@ def admin_edit_question(q_id):
     question = Questions.query.filter_by(q_id=q_id).first_or_404()
     form = EditQuestionForm(q_id)
     
+    # Populate Question Set choices
+    all_sets = QuestionSet.query.order_by(QuestionSet.quiz_category, QuestionSet.name).all()
+    form.question_set_id.choices = [(s.id, f"{s.quiz_category} - {s.name}") for s in all_sets]
+    
     if request.method == 'GET':
         # Pre-populate form with existing data
         form.ques.data = question.ques
@@ -983,6 +1189,7 @@ def admin_edit_question(q_id):
         form.d.data = question.d or ""
         form.ans.data = question.ans
         form.quiz_category.data = question.quiz_category
+        form.question_set_id.data = question.question_set_id # Pre-select set
         form.time_limit.data = question.time_limit
         form.rationalization.data = question.rationalization
         form.points.data = question.points
@@ -1037,6 +1244,7 @@ def admin_edit_question(q_id):
         question.d = None if form.question_type.data == 'TF' else form.d.data
         question.ans = form.ans.data
         question.quiz_category = form.quiz_category.data
+        question.question_set_id = form.question_set_id.data # Update set
         question.time_limit = form.time_limit.data
         question.rationalization = form.rationalization.data
         question.points = form.points.data
@@ -1135,6 +1343,46 @@ def admin_delete_selected():
     
     return redirect(url_for('admin_questions'))
 
+@app.route('/admin/assign_set', methods=['POST'])
+@admin_required
+def admin_assign_set():
+    """Bulk assign selected questions to a specific set"""
+    selected_ids = request.form.getlist('selected_questions')
+    set_id = request.form.get('target_set_id')
+    
+    if not selected_ids:
+        flash('No questions selected.', 'warning')
+        return redirect(url_for('admin_questions'))
+        
+    try:
+        # Convert to integers
+        question_ids = [int(q_id) for q_id in selected_ids]
+        
+        # Determine target set
+        target_set_id = None
+        target_set_name = "Default (No Set)"
+        
+        if set_id and set_id != 'none':
+            target_set_id = int(set_id)
+            set_obj = QuestionSet.query.get(target_set_id)
+            if set_obj:
+                target_set_name = set_obj.name
+        
+        # Update questions
+        updated_count = Questions.query.filter(Questions.q_id.in_(question_ids)).update(
+            {Questions.question_set_id: target_set_id},
+            synchronize_session=False
+        )
+        
+        db.session.commit()
+        flash(f'Successfully assigned {updated_count} questions to "{target_set_name}".', 'success')
+        
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error assigning questions: {str(e)}', 'error')
+        
+    return redirect(url_for('admin_questions'))
+
 @app.route('/admin_students', methods=['GET', 'POST'])
 @admin_required
 def admin_students():
@@ -1228,11 +1476,9 @@ def admin_bulk_upload_students():
                 flash('CSV file must contain "username" and "email" columns. "section" is optional.', 'error')
                 return redirect(request.url)
                 
-            # Get active section from session to use as default if not specified in CSV
-            active_section = session.get('active_section_name')
-            if active_section == 'All Classes':
-                active_section = None
-                
+            # Get active section details from session
+            active_section_name_from_session = session.get('active_section_name')
+
             created = []
             
             for row in reader:
@@ -1240,14 +1486,14 @@ def admin_bulk_upload_students():
                 username = row.get('username')
                 email = row.get('email')
                 
-                # Determine section: CSV value > Active Session Section > Default
-                csv_section = row.get('section', '').strip()
-                if csv_section:
-                    section = csv_section
-                elif active_section:
-                    section = active_section
-                else:
-                    section = 'Default'
+                # Determine section name to use for the user
+                csv_section_name = row.get('section', '').strip()
+                final_section_name = 'Default' # Default if nothing else
+                
+                if csv_section_name:
+                    final_section_name = csv_section_name
+                elif active_section_name_from_session and active_section_name_from_session != 'All Classes':
+                    final_section_name = active_section_name_from_session
                 
                 # Skip empty rows or rows with missing data
                 if not username or not email:
@@ -1264,10 +1510,22 @@ def admin_bulk_upload_students():
                     continue
                     
                 password = secrets.token_urlsafe(8)
-                user = User(username=username, email=email, is_admin=False, section=section)
+                user = User(username=username, email=email, is_admin=False, section=final_section_name) # Keep legacy string field
+                
+                # Link to Section model via FK
+                if final_section_name != 'Default':
+                    # Try to find existing section in DB
+                    section_obj = Section.query.filter_by(name=final_section_name).first()
+                    if not section_obj:
+                        # If not found, create new Section entry
+                        section_obj = Section(name=final_section_name, is_active=True) # New sections default to active
+                        db.session.add(section_obj)
+                        db.session.flush() # Assign an ID before commit
+                    user.section_id = section_obj.id
+                
                 user.set_password(password)
                 db.session.add(user)
-                created.append((username, email, password, section))
+                created.append((username, email, password, final_section_name))
             
             db.session.commit()
             
@@ -1645,6 +1903,119 @@ def admin_delete_category_questions(category):
     return redirect(url_for('admin_questions'))
 
 # ===============================
+# QUESTION SET MANAGEMENT ROUTES
+# ===============================
+
+@app.route('/admin/question_sets')
+@admin_required
+def admin_question_sets():
+    """Manage Question Sets (Exams)"""
+    # Get all sets ordered by category then name
+    sets = QuestionSet.query.order_by(QuestionSet.quiz_category, QuestionSet.name).all()
+    
+    # Get distinct categories for the add form
+    categories = db.session.query(Questions.quiz_category).distinct().all()
+    categories = [c[0] for c in categories if c[0]]
+    if not categories:
+        categories = ['General'] # Default if empty
+        
+    return render_template('admin/question_sets.html', 
+                         title='Manage Question Sets',
+                         sets=sets,
+                         categories=categories)
+
+@app.route('/admin/question_sets/add', methods=['POST'])
+@admin_required
+def admin_add_question_set():
+    """Create a new question set"""
+    name = request.form.get('name')
+    category = request.form.get('category')
+    description = request.form.get('description')
+    
+    if not name or not category:
+        flash('Name and Category are required.', 'error')
+        return redirect(url_for('admin_question_sets'))
+        
+    try:
+        # Check if set with same name exists in category
+        existing = QuestionSet.query.filter_by(name=name, quiz_category=category).first()
+        if existing:
+            flash(f'A set named "{name}" already exists for {category}.', 'error')
+            return redirect(url_for('admin_question_sets'))
+            
+        new_set = QuestionSet(
+            name=name,
+            quiz_category=category,
+            description=description,
+            is_active=False # Default to inactive
+        )
+        db.session.add(new_set)
+        db.session.commit()
+        flash(f'Question Set "{name}" created for {category}.', 'success')
+        
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error creating set: {str(e)}', 'error')
+        
+    return redirect(url_for('admin_question_sets'))
+
+@app.route('/admin/question_sets/toggle/<int:id>', methods=['POST'])
+@admin_required
+def admin_toggle_question_set(id):
+    """Toggle active status of a set. ENSURES ONLY ONE ACTIVE SET PER CATEGORY."""
+    q_set = QuestionSet.query.get_or_404(id)
+    
+    try:
+        if not q_set.is_active:
+            # We are activating this set.
+            # First, deactivate ALL other sets in this category
+            QuestionSet.query.filter_by(quiz_category=q_set.quiz_category).update({QuestionSet.is_active: False})
+            
+            # Now activate this one
+            q_set.is_active = True
+            msg = f'Activated "{q_set.name}" for {q_set.quiz_category}.'
+        else:
+            # We are deactivating. Just do it (no active set is allowed/possible)
+            q_set.is_active = False
+            msg = f'Deactivated "{q_set.name}".'
+            
+        db.session.commit()
+        flash(msg, 'success')
+        
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error updating set: {str(e)}', 'error')
+        
+    return redirect(url_for('admin_question_sets'))
+
+@app.route('/admin/question_sets/delete/<int:id>', methods=['POST'])
+@admin_required
+def admin_delete_question_set(id):
+    """Delete a question set and handle its questions"""
+    q_set = QuestionSet.query.get_or_404(id)
+    
+    # Optional: Logic to move questions to another set or delete them?
+    # For now, just deleting the set will set question_set_id to NULL if we didn't cascade delete.
+    # But we want to prevent orphan questions.
+    
+    # Check if there are questions
+    q_count = Questions.query.filter_by(question_set_id=id).count()
+    
+    if q_count > 0:
+        flash(f'Cannot delete set "{q_set.name}" because it contains {q_count} questions. Please move or delete the questions first.', 'error')
+        return redirect(url_for('admin_question_sets'))
+        
+    try:
+        db.session.delete(q_set)
+        db.session.commit()
+        flash(f'Question Set "{q_set.name}" deleted.', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error deleting set: {str(e)}', 'error')
+        
+    return redirect(url_for('admin_question_sets'))
+
+# ===============================
 # MODULE 3: ADMIN ANALYTICS ROUTES
 # ===============================
 
@@ -1652,24 +2023,53 @@ def admin_delete_category_questions(category):
 @admin_required
 def admin_analytics():
     """MODULE 3: Real Analytics dashboard with actual distractor analysis"""
-    from sqlalchemy import func, case, desc
+    from sqlalchemy import func, case, desc, or_
     from app.models import StudentResponse
     
-    # Get selected category from query params
-    selected_category = request.args.get('category', '')
+    # STRICT MODE (Relaxed): Analytics are driven by the selected Class Section, 
+    # BUT we allow manual override via query param for flexibility/debugging.
     
-    # Get all available categories
+    # 1. Determine Category
+    active_section = session.get('active_section_name', 'General')
+    default_category = 'General'
+    if active_section != 'All Classes':
+        default_category = active_section
+        
+    selected_category = request.args.get('category', default_category)
+        
+    # 2. Always target the ACTIVE Set for this category
+    selected_set_id = 'active'
+    
+    # Get all available categories (just for display if needed, but dropdown is gone)
     categories = db.session.query(Questions.quiz_category).distinct().all()
     categories = [cat[0] for cat in categories if cat[0]]
     
+    # Determine which set we are targeting (Always Active Set now)
+    target_set = None
+    active_set_obj = None
+    
+    if selected_category:
+        active_set_obj = get_active_question_set(selected_category)
+        target_set = active_set_obj # Always target active set
+        
     # Base query for responses
     responses_query = StudentResponse.query
     if selected_category:
         responses_query = responses_query.filter_by(quiz_category=selected_category)
+        
+        if hasattr(target_set, 'id'): # It's a QuestionSet object
+             responses_query = responses_query.filter_by(question_set_id=target_set.id)
+        elif target_set is None:
+             # If no active set exists, what do we show?
+             # User asked for "result of the activated set". 
+             # If none is active, we probably shouldn't show mixed legacy data unless we want to be nice.
+             # But strictly speaking, if no set is active, we might show nothing or legacy. 
+             # Let's show legacy/all for that category if NO set is active, to avoid empty screen confusion.
+             pass 
     
     # Calculate overall statistics with REAL data
     if selected_category:
-        # Stats for specific category
+        # Stats for specific category/set
         category_responses = responses_query.all()
         if category_responses:
             unique_students = set(r.user_id for r in category_responses)
@@ -1713,9 +2113,9 @@ def admin_analytics():
             
             stats = {
                 'total_students': len(unique_students),
-                'highest_score': 0,  # Will calculate below
-                'lowest_score': 0,   # Will calculate below  
-                'average_score': 0,  # Will calculate below
+                'highest_score': 0, 
+                'lowest_score': 0, 
+                'average_score': 0, 
                 'total_responses': len(all_responses),
                 'correct_responses': len(correct_responses)
             }
@@ -1731,8 +2131,15 @@ def admin_analytics():
     
     # Get questions for analysis
     questions_query = Questions.query
-    if selected_category:
+    
+    # LOGIC FIX: If we have a target set (Active Set), we should filter ONLY by that set ID.
+    # The category filter is redundant and harmful if a question's category tag doesn't match the set's category.
+    if hasattr(target_set, 'id'):
+        questions_query = questions_query.filter_by(question_set_id=target_set.id)
+    elif selected_category:
+        # Only fallback to category filtering if we are NOT looking at a specific set
         questions_query = questions_query.filter_by(quiz_category=selected_category)
+            
     questions = questions_query.order_by(Questions.q_id).all()
     
     # REAL DISTRACTOR ANALYSIS with SQLAlchemy queries
@@ -1741,7 +2148,11 @@ def admin_analytics():
     for question in questions:
         # Query actual student responses for this question
         question_responses = StudentResponse.query.filter_by(question_id=question.q_id)
-        if selected_category:
+        
+        # SAME LOGIC FIX: Filter responses by set ID if we have one
+        if hasattr(target_set, 'id'):
+            question_responses = question_responses.filter_by(question_set_id=target_set.id)
+        elif selected_category:
             question_responses = question_responses.filter_by(quiz_category=selected_category)
         
         responses = question_responses.all()
@@ -1787,8 +2198,8 @@ def admin_analytics():
     
     return render_template('admin/analytics.html',
                          title='Quiz Analytics - Real Distractor Analysis',
-                         categories=categories,
                          selected_category=selected_category,
+                         active_set_obj=active_set_obj,
                          stats=stats,
                          question_analytics=question_analytics)
 
@@ -1800,10 +2211,16 @@ def admin_analytics_export():
     
     selected_category = request.args.get('category', '')
     
-    # Get questions
+    # Get questions and filter by active set if applicable
     questions_query = Questions.query
+    active_set = None
+    
     if selected_category:
+        active_set = get_active_question_set(selected_category)
         questions_query = questions_query.filter_by(quiz_category=selected_category)
+        if active_set:
+             questions_query = questions_query.filter_by(question_set_id=active_set.id)
+             
     questions = questions_query.order_by(Questions.quiz_category, Questions.q_id).all()
     
     # Create CSV in memory
@@ -1818,6 +2235,8 @@ def admin_analytics_export():
         response_query = StudentResponse.query.filter_by(question_id=question.q_id)
         if selected_category:
             response_query = response_query.filter_by(quiz_category=selected_category)
+            if active_set:
+                response_query = response_query.filter_by(question_set_id=active_set.id)
         
         responses = response_query.all()
         
