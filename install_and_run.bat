@@ -23,17 +23,16 @@ if errorlevel 1 (
 echo [SUCCESS] Python is ready!
 
 echo.
-echo [STEP 2/4] Installing required packages...
-echo This may take a minute...
-py -m pip install --upgrade pip
-py -m pip install flask flask-sqlalchemy flask-login flask-admin flask-wtf werkzeug wtforms
-if errorlevel 1 (
-    echo [ERROR] Package installation failed!
-    echo Please check your internet connection and try again
-    pause
-    exit /b 1
-)
-echo [SUCCESS] All packages installed!
+echo [STEP 2/4] Skipping package installation (Offline Mode)...
+REM py -m pip install --upgrade pip
+REM py -m pip install flask flask-sqlalchemy flask-login flask-admin flask-wtf werkzeug wtforms
+REM if errorlevel 1 (
+REM     echo [ERROR] Package installation failed!
+REM     echo Please check your internet connection and try again
+REM     pause
+REM     exit /b 1
+REM )
+echo [SUCCESS] Packages assumed installed!
 
 echo.
 echo [STEP 3/4] Setting up database...

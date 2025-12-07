@@ -4,6 +4,15 @@ from flask_login import UserMixin
 from datetime import datetime
 
 
+class Section(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(64), unique=True, nullable=False)
+    students = db.relationship('User', backref='section_rel', lazy='dynamic')
+
+    def __repr__(self):
+        return '<Section {}>'.format(self.name)
+
+
 class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(64), index=True, unique=True)
@@ -13,6 +22,8 @@ class User(UserMixin, db.Model):
     is_admin = db.Column(db.Boolean, default=False, nullable=False)
     shuffle_questions = db.Column(db.Boolean, default=False, nullable=False) # Feature to randomize questions per student
     session_token = db.Column(db.String(128), index=True)
+    section = db.Column(db.String(64), default='Default')  # Legacy string field
+    section_id = db.Column(db.Integer, db.ForeignKey('section.id'), nullable=True) # New FK
     
     # New relationship for quiz scores
     scores = db.relationship('QuizScore', backref='student', lazy='dynamic', cascade='all, delete-orphan')

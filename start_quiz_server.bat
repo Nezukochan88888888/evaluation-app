@@ -21,9 +21,9 @@ if errorlevel 1 (
 echo [SUCCESS] Python found!
 
 echo.
-echo [INFO] Installing/checking required packages...
-py -m pip install flask flask-sqlalchemy flask-login flask-admin flask-wtf werkzeug wtforms --quiet --upgrade
-echo [SUCCESS] Required packages ready!
+echo [INFO] Skipping package check (Offline Mode)...
+REM py -m pip install flask flask-sqlalchemy flask-login flask-admin flask-wtf werkzeug wtforms --quiet --upgrade
+echo [SUCCESS] Required packages assumed ready!
 
 echo.
 echo [INFO] Checking database...

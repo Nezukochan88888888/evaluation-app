@@ -11,4 +11,5 @@ if __name__ == "__main__":
     print('=============================================')
     
     # Use Waitress production server instead of Flask dev server
-    serve(app, host='0.0.0.0', port=5000, threads=6) 
+    # threads=64 ensures enough concurrency for 60 students (1 thread per active request)
+    serve(app, host='0.0.0.0', port=5000, threads=64) 

@@ -67,7 +67,7 @@ echo ===================================
 echo.
 echo Starting optimized production server (Waitress)...
 echo.
-start "Quiz Server PROD" cmd /c "py main.py"
+start "Quiz Server PROD" cmd /c "start_production_server.bat"
 timeout /t 3 >nul
 goto CHECK_STATUS
 
@@ -112,38 +112,58 @@ echo 📊 SERVER STATUS CHECK
 echo =====================
 echo.
 
-REM Check if Python processes are running
+REM --- Check Port 5000 ---
+netstat -an | findstr /R /C:":5000.*LISTENING" >nul
+if %ERRORLEVEL% EQU 0 goto STATUS_RUNNING
+goto STATUS_STOPPED
+
+:STATUS_RUNNING
+echo ✅ SERVER STATUS: RUNNING (Port 5000 Active)
+echo 📡 Server is listening for connections.
+
+REM Check for python processes (informational)
 tasklist /FI "IMAGENAME eq python.exe" 2>NUL | find /I /N "python.exe" >NUL
-if "%ERRORLEVEL%"=="0" (
-    echo ✅ SERVER STATUS: RUNNING
-    echo 🐍 Python processes detected
-) else (
-    tasklist /FI "IMAGENAME eq py.exe" 2>NUL | find /I /N "py.exe" >NUL
-    if "%ERRORLEVEL%"=="0" (
-        echo ✅ SERVER STATUS: RUNNING  
-        echo 🐍 Python processes detected
-    ) else (
-        echo ❌ SERVER STATUS: STOPPED
-        echo 💤 No Python processes found
-        echo.
-        pause
-        goto MAIN_MENU
-    )
-)
+if %ERRORLEVEL% EQU 0 goto FOUND_PYTHON_EXE
+tasklist /FI "IMAGENAME eq py.exe" 2>NUL | find /I /N "py.exe" >NUL
+if %ERRORLEVEL% EQU 0 goto FOUND_PY_EXE
 
-echo.
-echo 🌐 Checking port 5000...
-netstat -an | findstr :5000 >nul
-if "%ERRORLEVEL%"=="0" (
-    echo ✅ PORT 5000: ACTIVE
-    echo 📡 Server is listening for connections
-) else (
-    echo ❌ PORT 5000: NOT ACTIVE
-    echo 🔌 Server may be starting up or stopped
-)
+echo ❗ Note: No obvious Python process found, but port 5000 is active.
+goto STATUS_RUNNING_DONE
 
+:FOUND_PYTHON_EXE
+echo 🐍 Python process detected (python.exe).
+goto STATUS_RUNNING_DONE
+
+:FOUND_PY_EXE
+echo 🐍 Python process detected (py.exe).
+goto STATUS_RUNNING_DONE
+
+:STATUS_RUNNING_DONE
 echo.
-goto SHOW_URLS
+pause
+goto MAIN_MENU
+
+:STATUS_STOPPED
+echo ❌ SERVER STATUS: STOPPED (Port 5000 Not Active)
+echo 🔌 Server is not listening on port 5000.
+
+REM Check for lingering processes
+tasklist /FI "IMAGENAME eq python.exe" 2>NUL | find /I /N "python.exe" >NUL
+if %ERRORLEVEL% EQU 0 goto PROCESS_FOUND_NO_PORT
+tasklist /FI "IMAGENAME eq py.exe" 2>NUL | find /I /N "py.exe" >NUL
+if %ERRORLEVEL% EQU 0 goto PROCESS_FOUND_NO_PORT
+
+echo 💤 No Python processes found.
+echo.
+pause
+goto MAIN_MENU
+
+:PROCESS_FOUND_NO_PORT
+echo 🐍 Python process detected, but not listening on 5000.
+echo    It might be stuck, starting up, or on another port.
+echo.
+pause
+goto MAIN_MENU
 
 :SHOW_URLS
 echo.

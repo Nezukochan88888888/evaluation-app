@@ -34,6 +34,7 @@
 
                 <div class="card-body">
                     <form id="question-form" method="post" novalidate>
+                        {{ form.hidden_tag() }}
                         <!-- Display image if available for image-based questions -->
                         {% if q.image_file %}
                             <div class="question-image text-center mb-4">

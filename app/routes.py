@@ -6,7 +6,7 @@ except ImportError:
     from urllib.parse import urlparse as url_parse
 from werkzeug.utils import secure_filename
 from app.forms import LoginForm, RegistrationForm, QuestionForm, AdminQuestionForm, EditQuestionForm
-from app.models import User, Questions, QuizScore
+from app.models import User, Questions, QuizScore, Section
 from sqlalchemy import desc
 from flask_login import current_user, login_user, logout_user, login_required
 from flask_admin.contrib.sqla import ModelView
@@ -73,12 +73,90 @@ class BulkUploadView(BaseView):
             return redirect(request.url)
         return self.render('admin/bulk_upload.html')
 
+from wtforms import FileField
+
+class SectionModelView(SecureModelView):
+    form_extra_fields = {
+        'student_csv': FileField('Bulk Add Students (CSV)', 
+                               description='Optional: Upload a CSV with "username" and "email" columns to automatically add students to this section.')
+    }
+
+    def on_model_change(self, form, model, is_created):
+        file = form.student_csv.data
+        if file:
+            try:
+                stream = io.StringIO(file.stream.read().decode('utf-8-sig'))
+                reader = csv.DictReader(stream)
+                
+                # Normalize headers
+                if reader.fieldnames:
+                    reader.fieldnames = [name.strip().lower() for name in reader.fieldnames]
+                
+                count = 0
+                for row in reader:
+                    username = row.get('username', '').strip()
+                    email = row.get('email', '').strip()
+                    
+                    if not username or not email:
+                        continue
+                        
+                    # Check if user exists
+                    if User.query.filter((User.username==username)|(User.email==email)).first():
+                        continue
+                        
+                    password = secrets.token_urlsafe(8)
+                    user = User(username=username, email=email, is_admin=False)
+                    user.set_password(password)
+                    
+                    # Set legacy section string as well for compatibility
+                    # Note: model.name should be populated by the form
+                    if model.name:
+                        user.section = model.name
+                    
+                    # Add to this section (SQLAlchemy relationship)
+                    # This will automatically set section_id when the section is committed
+                    model.students.append(user)
+                    count += 1
+                
+                if count > 0:
+                    flash(f'Added {count} students from CSV to section "{model.name}".', 'success')
+            except Exception as e:
+                flash(f'Error processing CSV: {e}', 'error')
+                
+        return super(SectionModelView, self).on_model_change(form, model, is_created)
+
 # Register admin views
 from app import db as _db
 admin.add_view(SecureModelView(User, _db.session, category='Models'))
 admin.add_view(SecureModelView(Questions, _db.session, category='Models', endpoint='db_questions'))
+admin.add_view(SectionModelView(Section, _db.session, category='Models', endpoint='db_sections'))
 admin.add_view(BulkUploadView(name='Bulk Upload', endpoint='bulk_upload'))
 
+
+@app.context_processor
+def inject_sections():
+    if current_user.is_authenticated and getattr(current_user, 'is_admin', False):
+        # Wrap in try-except to avoid issues during db migrations or if table doesn't exist yet
+        try:
+            all_sections = Section.query.order_by(Section.name).all()
+            current_section_name = session.get('active_section_name', 'All Classes')
+            return dict(all_sections=all_sections, current_section_name=current_section_name)
+        except Exception:
+            return dict()
+    return dict()
+
+@app.route('/switch_section/<int:section_id>')
+@admin_required
+def switch_section(section_id):
+    if section_id == 0:
+        session.pop('active_section_id', None)
+        session['active_section_name'] = 'All Classes'
+    else:
+        section = Section.query.get_or_404(section_id)
+        session['active_section_id'] = section.id
+        session['active_section_name'] = section.name
+    
+    return redirect(request.referrer or url_for('admin_dashboard'))
 
 @app.before_request
 def before_request():
@@ -197,7 +275,9 @@ def login():
 def register():
     form = RegistrationForm()
     if form.validate_on_submit():
-        user = User(username=form.username.data, email=form.email.data)
+        # Include section if provided
+        section = form.section.data if form.section.data else 'Default'
+        user = User(username=form.username.data, email=form.email.data, section=section)
         user.set_password(form.password.data)
         db.session.add(user)
         db.session.commit()
@@ -775,11 +855,20 @@ def logout():
 def admin_dashboard():
     """Main admin dashboard"""
     question_count = Questions.query.count()
-    student_count = User.query.filter_by(is_admin=False).count()
+    
+    # Filter students by active section
+    active_section_id = session.get('active_section_id')
+    student_query = User.query.filter_by(is_admin=False)
+    
+    if active_section_id:
+        student_query = student_query.filter_by(section_id=active_section_id)
+        
+    student_count = student_query.count()
     admin_count = User.query.filter_by(is_admin=True).count()
     
     recent_questions = Questions.query.order_by(Questions.q_id.desc()).limit(5).all()
-    top_students = User.query.filter_by(is_admin=False).order_by(
+    
+    top_students = student_query.order_by(
         db.desc(db.func.coalesce(User.marks, 0))
     ).limit(5).all()
     
@@ -1050,8 +1139,35 @@ def admin_delete_selected():
 @admin_required
 def admin_students():
     """View all students and their scores including incomplete attempts"""
-    # Get all students with their quiz scores
-    students = db.session.query(User).filter_by(is_admin=False).all()
+    
+    # Get all unique sections for the filter dropdown
+    # 1. Fetch from Section model (Official sections)
+    db_sections = Section.query.with_entities(Section.name).all()
+    db_section_names = [s[0] for s in db_sections]
+    
+    # 2. Fetch from User model (Legacy/Ad-hoc sections)
+    user_sections = db.session.query(User.section).filter(User.is_admin==False).distinct().all()
+    user_section_names = [s[0] for s in user_sections if s[0]]
+    
+    # 3. Combine and sort
+    sections = sorted(list(set(db_section_names + user_section_names)))
+    
+    # Determine default section from session (Nav bar selection)
+    session_section = session.get('active_section_name', 'All Classes')
+    default_section = 'All' if session_section == 'All Classes' else session_section
+    
+    # Get selected section from query parameters, defaulting to the session section
+    selected_section = request.args.get('section', default_section)
+    
+    # Base query
+    query = User.query.filter_by(is_admin=False)
+    
+    # Apply filter if specific section selected
+    if selected_section != 'All':
+        query = query.filter_by(section=selected_section)
+        
+    # Get filtered students
+    students = query.all()
     
     # Create enhanced student data with quiz score details
     enhanced_students = []
@@ -1069,6 +1185,7 @@ def admin_students():
             'id': student.id,
             'username': student.username,
             'email': student.email,
+            'section': student.section or 'Default',  # Add section to data
             'legacy_marks': student.marks,  # Keep legacy field for compatibility
             'quiz_score': latest_score.score if latest_score else None,
             'quiz_status': latest_score.status if latest_score else ('Not Started' if not has_any_score else 'Legacy Score'),
@@ -1084,7 +1201,92 @@ def admin_students():
     
     return render_template('admin/students.html', 
                          title='Student Scores & Performance', 
-                         students=enhanced_students)
+                         students=enhanced_students,
+                         sections=sections,
+                         selected_section=selected_section)
+
+@app.route('/admin_bulk_upload_students', methods=['GET', 'POST'])
+@admin_required
+def admin_bulk_upload_students():
+    """Bulk upload students via CSV"""
+    if request.method == 'POST':
+        file = request.files.get('file')
+        if not file:
+            flash('No file uploaded', 'error')
+            return redirect(request.url)
+        
+        try:
+            stream = io.StringIO(file.stream.read().decode('utf-8-sig'))
+            reader = csv.DictReader(stream)
+            
+            # Normalize headers: strip whitespace and convert to lowercase
+            if reader.fieldnames:
+                reader.fieldnames = [name.strip().lower() for name in reader.fieldnames]
+            
+            # Validate headers
+            if not reader.fieldnames or 'username' not in reader.fieldnames or 'email' not in reader.fieldnames:
+                flash('CSV file must contain "username" and "email" columns. "section" is optional.', 'error')
+                return redirect(request.url)
+                
+            # Get active section from session to use as default if not specified in CSV
+            active_section = session.get('active_section_name')
+            if active_section == 'All Classes':
+                active_section = None
+                
+            created = []
+            
+            for row in reader:
+                # Use get() with default to None, keys are now guaranteed lowercase
+                username = row.get('username')
+                email = row.get('email')
+                
+                # Determine section: CSV value > Active Session Section > Default
+                csv_section = row.get('section', '').strip()
+                if csv_section:
+                    section = csv_section
+                elif active_section:
+                    section = active_section
+                else:
+                    section = 'Default'
+                
+                # Skip empty rows or rows with missing data
+                if not username or not email:
+                    continue
+                    
+                username = username.strip()
+                email = email.strip()
+                
+                if not username or not email:
+                    continue
+                    
+                # Check if user exists
+                if User.query.filter((User.username==username)|(User.email==email)).first():
+                    continue
+                    
+                password = secrets.token_urlsafe(8)
+                user = User(username=username, email=email, is_admin=False, section=section)
+                user.set_password(password)
+                db.session.add(user)
+                created.append((username, email, password, section))
+            
+            db.session.commit()
+            
+            if created:
+                flash(f"Successfully created {len(created)} students.", 'success')
+            else:
+                flash('No new users were created (possibly duplicates or invalid data).', 'warning')
+                
+        except UnicodeDecodeError:
+             flash('Invalid file format. Please upload a valid CSV file (UTF-8 encoded).', 'error')
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Error processing file: {str(e)}', 'error')
+            
+        return redirect(url_for('admin_students'))
+        
+    return render_template('admin/bulk_upload.html', 
+                         title='Bulk Upload Students',
+                         upload_type='students')
 
 @app.route('/admin/toggle_shuffle/<int:user_id>', methods=['POST'])
 @admin_required
@@ -1099,10 +1301,37 @@ def admin_toggle_shuffle(user_id):
     try:
         db.session.commit()
         status_msg = "enabled" if student.shuffle_questions else "disabled"
+        
+        # Check if AJAX request
+        if request.accept_mimetypes.accept_json and not request.accept_mimetypes.accept_html:
+             return {'status': 'success', 'new_state': student.shuffle_questions, 'message': f'Randomization {status_msg} for {student.username}'}
+        
         flash(f'Randomization {status_msg} for student {student.username}', 'success')
     except Exception as e:
         db.session.rollback()
+        if request.accept_mimetypes.accept_json and not request.accept_mimetypes.accept_html:
+            return {'status': 'error', 'message': str(e)}, 500
         flash(f'Error updating student: {str(e)}', 'error')
+        
+    return redirect(url_for('admin_students'))
+
+@app.route('/admin/toggle_shuffle_all', methods=['POST'])
+@admin_required
+def admin_toggle_shuffle_all():
+    """Toggle randomization setting for ALL students"""
+    enable = request.form.get('enable') == 'true'
+    
+    try:
+        # Update all non-admin users
+        # Using bulk update for efficiency
+        User.query.filter_by(is_admin=False).update({User.shuffle_questions: enable})
+        db.session.commit()
+        
+        status_msg = "ENABLED" if enable else "DISABLED"
+        flash(f'Randomization {status_msg} for ALL students.', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error updating students: {str(e)}', 'error')
         
     return redirect(url_for('admin_students'))
 

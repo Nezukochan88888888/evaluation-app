@@ -21,9 +21,9 @@ if errorlevel 1 (
 echo [SUCCESS] Python found!
 
 echo.
-echo [INFO] Installing production server requirements...
-py -m pip install flask flask-sqlalchemy flask-login flask-admin flask-wtf werkzeug wtforms waitress --quiet --upgrade
-echo [SUCCESS] Production packages ready!
+echo [INFO] Skipping dependency installation (Offline Mode)...
+REM py -m pip install flask flask-sqlalchemy flask-login flask-admin flask-wtf werkzeug wtforms waitress --quiet --upgrade
+REM echo [SUCCESS] Production packages ready!
 
 echo.
 echo [INFO] Checking database...
@@ -62,7 +62,7 @@ echo.
 echo [SERVER INFO]
 echo Server Type:      Waitress (Production Grade)
 echo Capacity:         60+ Students
-echo Threads:          6 (Concurrent Handling)
+echo Threads:          64 (Concurrent Handling)
 echo Host Binding:     0.0.0.0 (Network Access)
 echo Port:             5000
 echo.

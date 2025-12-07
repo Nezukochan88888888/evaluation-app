@@ -4,8 +4,7 @@ FROM python:3.10-slim
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
-    FLASK_APP=main.py \
-    FLASK_ENV=development
+    FLASK_APP=main.py
 
 WORKDIR /app
 
@@ -13,17 +12,24 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends build-essential && rm -rf /var/lib/apt/lists/*
 
 # Install dependencies first (better layer caching)
-COPY requirements.txt ./
+COPY requirements.txt ./ 
 RUN pip install --upgrade pip && pip install -r requirements.txt
 
 # Copy app
 COPY . .
 
+# Create a non-root user
+RUN useradd -m appuser && chown -R appuser:appuser /app
+
+# Switch to non-root user
+USER appuser
+
 # Expose Flask port
 EXPOSE 5000
 
 # Entrypoint script will handle migrations, seeding, and server start
-COPY entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
+# Copy to workdir instead of root to keep permissions simple
+COPY --chown=appuser:appuser entrypoint.sh ./entrypoint.sh
+RUN chmod +x ./entrypoint.sh
 
-CMD ["/entrypoint.sh"]
+CMD ["./entrypoint.sh"]

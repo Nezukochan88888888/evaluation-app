@@ -47,6 +47,16 @@
                     {% else %}
                         <p class="text-muted">Upload a CSV file with the following headers:</p>
                         <code>username,email</code>
+
+                        {% if current_section_name and current_section_name != 'All Classes' %}
+                            <div class="alert alert-success mt-3">
+                                <i class="fas fa-check-circle"></i> New students will be assigned to section: <strong>{{ current_section_name }}</strong> (unless specified in CSV)
+                            </div>
+                        {% else %}
+                            <div class="alert alert-secondary mt-3">
+                                <i class="fas fa-info-circle"></i> No active section selected. Students will be assigned to "Default" (unless specified in CSV).
+                            </div>
+                        {% endif %}
                     {% endif %}
 
                     <form method="post" enctype="multipart/form-data" class="mt-4">
