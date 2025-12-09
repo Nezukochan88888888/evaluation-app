@@ -253,8 +253,6 @@ def home():
                                  recent_scores=recent_scores)
         else:
             # Student home view
-            user_score = current_user.marks or 0
-            
             # Count questions available to this student based on Active Set logic
             category = 'General'
             if current_user.section and current_user.section not in ['Default', 'General']:
@@ -266,20 +264,39 @@ def home():
             if active_set:
                 # Count questions in the active set
                 question_count = Questions.query.filter_by(question_set_id=active_set.id).count()
+                
+                # Get student's score for THIS specific question set
+                student_score_record = QuizScore.query.filter_by(
+                    user_id=current_user.id,
+                    question_set_id=active_set.id,
+                    status='completed'
+                ).order_by(QuizScore.timestamp.desc()).first()
+                
+                user_score = student_score_record.score if student_score_record else 0
+                has_taken_quiz = student_score_record is not None
+                
+                # Get user rank for THIS question set
+                rank = None
+                if has_taken_quiz:
+                    better_scores = QuizScore.query.join(User).filter(
+                        QuizScore.question_set_id == active_set.id,
+                        QuizScore.score > user_score,
+                        QuizScore.status == 'completed',
+                        User.is_admin == False
+                    ).count()
+                    rank = better_scores + 1
             else:
                 # Fallback: Count all questions in category (Legacy behavior)
                 question_count = Questions.query.filter_by(quiz_category=category).count()
-            
-            has_taken_quiz = current_user.marks is not None and current_user.marks > 0
-            
-            # Get user rank if they've taken the quiz
-            rank = None
-            if has_taken_quiz:
-                better_scores = User.query.filter(
-                    User.marks > user_score,
-                    User.is_admin == False
-                ).count()
-                rank = better_scores + 1
+                user_score = current_user.marks or 0
+                has_taken_quiz = current_user.marks is not None and current_user.marks > 0
+                rank = None
+                if has_taken_quiz:
+                    better_scores = User.query.filter(
+                        User.marks > user_score,
+                        User.is_admin == False
+                    ).count()
+                    rank = better_scores + 1
             
             return render_template('index.html', 
                                  title='Student Home',
@@ -294,16 +311,137 @@ def home():
 
 @app.route('/leaderboard')
 def leaderboard():
-    """Show top 3 students in podium format"""
+    """Show all students in a ranked list for a specific question set"""
     try:
-        # Get only top 3 students (non-admin users with scores)
-        users = User.query.filter_by(is_admin=False).filter(
-            User.marks.isnot(None)
-        ).order_by(User.marks.desc()).limit(3).all()
+        selected_set = None
+        all_sets = None
+
+        # Logic for determining the question set differs based on user role
+        if current_user.is_authenticated and current_user.is_admin:
+            # ADMINS: Can select any question set
+            all_sets = QuestionSet.query.order_by(QuestionSet.quiz_category, QuestionSet.name).all()
+            set_id_param = request.args.get('set_id')
+
+            if set_id_param and set_id_param.isdigit():
+                selected_set = QuestionSet.query.get(int(set_id_param))
+            else:
+                # Default to active set for the admin's current session section
+                active_section = session.get('active_section_name', 'General')
+                if active_section != 'All Classes':
+                    selected_set = get_active_question_set(active_section)
+                else:
+                    selected_set = get_active_question_set('General')
+        else:
+            # STUDENTS & GUESTS: Prefer the student's current quiz session (if any).
+            # If a student is currently taking a quiz we store the active
+            # question_set_id in the session; use that set so the leaderboard
+            # reflects exactly the quiz the student is taking. If no session
+            # set exists, fall back to the category-based active set.
+            selected_set = None
+            if current_user.is_authenticated:
+                # Use session-stored set id if present (student is taking a quiz)
+                session_set_id = session.get('question_set_id')
+                if session_set_id:
+                    selected_set = QuestionSet.query.get(session_set_id)
+
+            if not selected_set:
+                # No session set -> determine by category (General or student's section)
+                category = 'General'
+                if current_user.is_authenticated and current_user.section and current_user.section not in ['Default', 'General']:
+                    category = current_user.section
+                selected_set = get_active_question_set(category)
+        
+        if not selected_set:
+            return render_template('leaderboard.html',
+                                 title='Leaderboard',
+                                 users=[],
+                                 all_sets=all_sets,
+                                 selected_set=None,
+                                 is_admin=current_user.is_authenticated and current_user.is_admin)
+
+        # Determine section filter: admins may have an active section in session,
+        # students use their own section. If a specific section is active, limit
+        # the leaderboard to that section so it shows who in that class took
+        # the currently selected question set.
+        section_name = None
+        if current_user.is_authenticated and current_user.is_admin:
+            active_section = session.get('active_section_name', 'All Classes')
+            if active_section and active_section != 'All Classes':
+                section_name = active_section
+        else:
+            if current_user.is_authenticated and getattr(current_user, 'section', None) and current_user.section not in ['Default', 'General']:
+                section_name = current_user.section
+
+        # Base query for scores for the determined question set
+        query = db.session.query(QuizScore).join(
+            User, QuizScore.user_id == User.id
+        ).filter(
+            User.is_admin == False,
+            QuizScore.question_set_id == selected_set.id,
+            QuizScore.status.in_(['completed', 'incomplete'])
+        )
+
+        # Apply section filter if determined
+        if section_name:
+            query = query.filter(User.section == section_name)
+
+        # No free-text search on leaderboard. Compute ordered scores for the
+        # selected set (with optional section filter) and include a legacy
+        # fallback when no set-specific scores exist.
+        all_scores = query.order_by(QuizScore.score.desc(), QuizScore.timestamp.asc()).all()
+
+        # Legacy fallback: if no scores tied to this question_set_id, try
+        # scores recorded before question_set_id existed (NULL), matching the
+        # quiz_category. Apply the same section filter if present.
+        if not all_scores and selected_set:
+            fallback = db.session.query(QuizScore).join(
+                User, QuizScore.user_id == User.id
+            ).filter(
+                User.is_admin == False,
+                QuizScore.question_set_id == None,
+                QuizScore.quiz_category == selected_set.quiz_category,
+                QuizScore.status.in_(['completed', 'incomplete'])
+            )
+
+            if section_name:
+                fallback = fallback.filter(User.section == section_name)
+
+            all_scores = fallback.order_by(QuizScore.score.desc(), QuizScore.timestamp.asc()).all()
+
+        # Build top-ranked user list with tie-aware ranking. Include all users
+        # whose computed rank is 1..3 (so ties at rank 3 will be included).
+        users = []
+        prev_score = None
+        prev_rank = 0
+        position = 0
+        for qs in all_scores:
+            position += 1
+            score = qs.score
+            if score == prev_score:
+                rank = prev_rank
+            else:
+                rank = position
+                prev_rank = rank
+                prev_score = score
+
+            if rank > 3:
+                break
+
+            user = qs.student
+            user_obj = type('UserScore', (), {
+                'username': user.username,
+                'marks': qs.score,
+                'id': user.id,
+                'rank': rank
+            })()
+            users.append(user_obj)
         
         return render_template('leaderboard.html', 
-                             title='Leaderboard - Top 3',
-                             users=users)
+                             title='Leaderboard',
+                             users=users,
+                             all_sets=all_sets,
+                             selected_set=selected_set,
+                             is_admin=current_user.is_authenticated and current_user.is_admin)
         
     except Exception as e:
         flash(f'Error loading leaderboard: {e}', 'error')
@@ -832,18 +970,46 @@ def score():
             
         max_possible_score = total_questions * 1
         
-        # Get user's rank (Global rank? Or Set rank?)
-        # Let's keep global rank based on 'marks' for simplicity, or we'd need complex queries
-        better_scores = User.query.filter(
-            User.marks > final_score,
-            User.is_admin == False
-        ).count()
-        rank = better_scores + 1
-        
-        # Determine highest score user
-        top_user = User.query.filter_by(is_admin=False).order_by(
-            db.desc(db.func.coalesce(User.marks, 0))
-        ).first()
+        # Get user's rank for THIS specific question set
+        rank = None
+        top_user = None
+        if current_set_id:
+            # Calculate rank based on scores for this question set
+            better_scores = QuizScore.query.join(User).filter(
+                QuizScore.question_set_id == current_set_id,
+                QuizScore.score > final_score,
+                QuizScore.status == 'completed',
+                User.is_admin == False
+            ).count()
+            rank = better_scores + 1
+            
+            # Get highest score user for this question set
+            top_score_record = QuizScore.query.join(User).filter(
+                QuizScore.question_set_id == current_set_id,
+                QuizScore.status == 'completed',
+                User.is_admin == False
+            ).order_by(QuizScore.score.desc()).first()
+            
+            if top_score_record:
+                # Access user via backref relationship
+                user = top_score_record.student
+                # Create a simple object for template compatibility
+                top_user_obj = type('UserScore', (), {
+                    'username': user.username,
+                    'marks': top_score_record.score
+                })()
+                top_user = top_user_obj
+        else:
+            # Fallback to legacy marks-based ranking
+            better_scores = User.query.filter(
+                User.marks > final_score,
+                User.is_admin == False
+            ).count()
+            rank = better_scores + 1
+            
+            top_user = User.query.filter_by(is_admin=False).order_by(
+                db.desc(db.func.coalesce(User.marks, 0))
+            ).first()
         
         # MODULE 4: Get questions student got wrong for feedback
         missed_questions = []
@@ -1407,6 +1573,13 @@ def admin_students():
     # Get selected section from query parameters, defaulting to the session section
     selected_section = request.args.get('section', default_section)
     
+    # Find the currently active Question Set (any category)
+    # This displays what quiz students are currently taking
+    selected_set = QuestionSet.query.filter_by(is_active=True).first()
+    
+    # Note: selected_set is now independent of the section filter
+    # It shows the globally active question set, not per-section
+    
     # Base query
     query = User.query.filter_by(is_admin=False)
     
@@ -1416,18 +1589,26 @@ def admin_students():
         
     # Get filtered students
     students = query.all()
-    
+
     # Create enhanced student data with quiz score details
     enhanced_students = []
     for student in students:
         # Refresh student object to get latest data
         db.session.refresh(student)
         
-        # Get latest quiz score for this student
-        latest_score = QuizScore.query.filter_by(user_id=student.id).order_by(QuizScore.timestamp.desc()).first()
+        # Get quiz score for this student for the SELECTED question set
+        if selected_set:
+            # Filter by question_set_id to show scores for this specific set
+            student_score = QuizScore.query.filter_by(
+                user_id=student.id,
+                question_set_id=selected_set.id
+            ).order_by(QuizScore.timestamp.desc()).first()
+        else:
+            # Fallback: Get latest score (any set) if no set is selected
+            student_score = QuizScore.query.filter_by(user_id=student.id).order_by(QuizScore.timestamp.desc()).first()
         
         # Determine if student has any score at all
-        has_any_score = latest_score is not None or student.marks is not None
+        has_any_score = student_score is not None or student.marks is not None
         
         student_data = {
             'id': student.id,
@@ -1435,11 +1616,11 @@ def admin_students():
             'email': student.email,
             'section': student.section or 'Default',  # Add section to data
             'legacy_marks': student.marks,  # Keep legacy field for compatibility
-            'quiz_score': latest_score.score if latest_score else None,
-            'quiz_status': latest_score.status if latest_score else ('Not Started' if not has_any_score else 'Legacy Score'),
-            'quiz_category': latest_score.quiz_category if latest_score else None,
-            'quiz_timestamp': latest_score.timestamp if latest_score else None,
-            'display_score': 'Not Started' if (latest_score is None and student.marks is None) else (latest_score.score if latest_score else student.marks),
+            'quiz_score': student_score.score if student_score else None,
+            'quiz_status': student_score.status if student_score else 'Not Started',  # Only show status for current set
+            'quiz_category': student_score.quiz_category if student_score else None,
+            'quiz_timestamp': student_score.timestamp if student_score else None,
+            'display_score': student_score.score if student_score else 'Not Started',  # Only show score if they took THIS set
             'shuffle_questions': getattr(student, 'shuffle_questions', False)
         }
         enhanced_students.append(student_data)
@@ -1451,7 +1632,8 @@ def admin_students():
                          title='Student Scores & Performance', 
                          students=enhanced_students,
                          sections=sections,
-                         selected_section=selected_section)
+                         selected_section=selected_section,
+                         selected_set=selected_set)
 
 @app.route('/admin_bulk_upload_students', methods=['GET', 'POST'])
 @admin_required
@@ -2026,138 +2208,99 @@ def admin_analytics():
     from sqlalchemy import func, case, desc, or_
     from app.models import StudentResponse
     
-    # STRICT MODE (Relaxed): Analytics are driven by the selected Class Section, 
-    # BUT we allow manual override via query param for flexibility/debugging.
+    # Get all question sets for the dropdown
+    all_sets = QuestionSet.query.order_by(QuestionSet.quiz_category, QuestionSet.name).all()
     
-    # 1. Determine Category
-    active_section = session.get('active_section_name', 'General')
-    default_category = 'General'
-    if active_section != 'All Classes':
-        default_category = active_section
-        
-    selected_category = request.args.get('category', default_category)
-        
-    # 2. Always target the ACTIVE Set for this category
-    selected_set_id = 'active'
+    # Determine which question set to analyze
+    # Priority: 1) Manual selection via set_id param, 2) Active set for current class section
+    set_id_param = request.args.get('set_id')
+    selected_set = None
     
-    # Get all available categories (just for display if needed, but dropdown is gone)
-    categories = db.session.query(Questions.quiz_category).distinct().all()
-    categories = [cat[0] for cat in categories if cat[0]]
-    
-    # Determine which set we are targeting (Always Active Set now)
-    target_set = None
-    active_set_obj = None
-    
-    if selected_category:
-        active_set_obj = get_active_question_set(selected_category)
-        target_set = active_set_obj # Always target active set
-        
-    # Base query for responses
-    responses_query = StudentResponse.query
-    if selected_category:
-        responses_query = responses_query.filter_by(quiz_category=selected_category)
-        
-        if hasattr(target_set, 'id'): # It's a QuestionSet object
-             responses_query = responses_query.filter_by(question_set_id=target_set.id)
-        elif target_set is None:
-             # If no active set exists, what do we show?
-             # User asked for "result of the activated set". 
-             # If none is active, we probably shouldn't show mixed legacy data unless we want to be nice.
-             # But strictly speaking, if no set is active, we might show nothing or legacy. 
-             # Let's show legacy/all for that category if NO set is active, to avoid empty screen confusion.
-             pass 
-    
-    # Calculate overall statistics with REAL data
-    if selected_category:
-        # Stats for specific category/set
-        category_responses = responses_query.all()
-        if category_responses:
-            unique_students = set(r.user_id for r in category_responses)
-            correct_responses = [r for r in category_responses if r.is_correct]
-            total_responses = len(category_responses)
-            
-            # Calculate scores per student
-            student_scores = {}
-            for response in category_responses:
-                if response.user_id not in student_scores:
-                    student_scores[response.user_id] = {'correct': 0, 'total': 0}
-                student_scores[response.user_id]['total'] += 1
-                if response.is_correct:
-                    student_scores[response.user_id]['correct'] += 1
-            
-            scores = [data['correct'] for data in student_scores.values()]
-            
-            stats = {
-                'total_students': len(unique_students),
-                'highest_score': max(scores) if scores else 0,
-                'lowest_score': min(scores) if scores else 0,
-                'average_score': sum(scores) / len(scores) if scores else 0,
-                'total_responses': total_responses,
-                'correct_responses': len(correct_responses)
-            }
-        else:
-            stats = {
-                'total_students': 0,
-                'highest_score': 0,
-                'lowest_score': 0,
-                'average_score': 0,
-                'total_responses': 0,
-                'correct_responses': 0
-            }
+    if set_id_param and set_id_param.isdigit():
+        # Manual selection from dropdown
+        selected_set = QuestionSet.query.get(int(set_id_param))
     else:
-        # Overall stats across all categories
-        all_responses = StudentResponse.query.all()
-        if all_responses:
-            unique_students = set(r.user_id for r in all_responses)
-            correct_responses = [r for r in all_responses if r.is_correct]
-            
-            stats = {
-                'total_students': len(unique_students),
-                'highest_score': 0, 
-                'lowest_score': 0, 
-                'average_score': 0, 
-                'total_responses': len(all_responses),
-                'correct_responses': len(correct_responses)
-            }
-        else:
-            stats = {
-                'total_students': 0,
-                'highest_score': 0,
-                'lowest_score': 0,
-                'average_score': 0,
-                'total_responses': 0,
-                'correct_responses': 0
-            }
+        # Default: Use active set for the currently selected class section
+        active_section = session.get('active_section_name', 'General')
+        default_category = 'General'
+        if active_section != 'All Classes':
+            default_category = active_section
+        
+        # Get active set for this category
+        selected_set = get_active_question_set(default_category)
     
-    # Get questions for analysis
-    questions_query = Questions.query
+    # If no set selected, show empty analytics
+    if not selected_set:
+        return render_template('admin/analytics.html',
+                             title='Quiz Analytics - Real Distractor Analysis',
+                             selected_category=None,
+                             selected_set=None,
+                             all_sets=all_sets,
+                             active_set_obj=None,
+                             stats={
+                                 'total_students': 0,
+                                 'highest_score': 0,
+                                 'lowest_score': 0,
+                                 'average_score': 0,
+                                 'total_responses': 0,
+                                 'correct_responses': 0
+                             },
+                             question_analytics=[])
     
-    # LOGIC FIX: If we have a target set (Active Set), we should filter ONLY by that set ID.
-    # The category filter is redundant and harmful if a question's category tag doesn't match the set's category.
-    if hasattr(target_set, 'id'):
-        questions_query = questions_query.filter_by(question_set_id=target_set.id)
-    elif selected_category:
-        # Only fallback to category filtering if we are NOT looking at a specific set
-        questions_query = questions_query.filter_by(quiz_category=selected_category)
-            
-    questions = questions_query.order_by(Questions.q_id).all()
+    # Filter responses by the selected question set ID
+    # This ensures we only show analytics for responses to questions in THIS specific set
+    responses_query = StudentResponse.query.filter_by(question_set_id=selected_set.id)
+    all_responses = responses_query.all()
+    
+    # Calculate overall statistics
+    if all_responses:
+        unique_students = set(r.user_id for r in all_responses)
+        correct_responses = [r for r in all_responses if r.is_correct]
+        total_responses = len(all_responses)
+        
+        # Calculate scores per student for this question set
+        student_scores = {}
+        for response in all_responses:
+            if response.user_id not in student_scores:
+                student_scores[response.user_id] = {'correct': 0, 'total': 0}
+            student_scores[response.user_id]['total'] += 1
+            if response.is_correct:
+                student_scores[response.user_id]['correct'] += 1
+        
+        scores = [data['correct'] for data in student_scores.values()]
+        
+        stats = {
+            'total_students': len(unique_students),
+            'highest_score': max(scores) if scores else 0,
+            'lowest_score': min(scores) if scores else 0,
+            'average_score': sum(scores) / len(scores) if scores else 0,
+            'total_responses': total_responses,
+            'correct_responses': len(correct_responses)
+        }
+    else:
+        stats = {
+            'total_students': 0,
+            'highest_score': 0,
+            'lowest_score': 0,
+            'average_score': 0,
+            'total_responses': 0,
+            'correct_responses': 0
+        }
+    
+    # Get questions for this specific question set
+    questions = Questions.query.filter_by(question_set_id=selected_set.id).order_by(Questions.q_id).all()
     
     # REAL DISTRACTOR ANALYSIS with SQLAlchemy queries
     question_analytics = []
     
     for question in questions:
-        # Query actual student responses for this question
-        question_responses = StudentResponse.query.filter_by(question_id=question.q_id)
+        # Query actual student responses for this question IN THIS SET
+        question_responses = StudentResponse.query.filter_by(
+            question_id=question.q_id,
+            question_set_id=selected_set.id
+        ).all()
         
-        # SAME LOGIC FIX: Filter responses by set ID if we have one
-        if hasattr(target_set, 'id'):
-            question_responses = question_responses.filter_by(question_set_id=target_set.id)
-        elif selected_category:
-            question_responses = question_responses.filter_by(quiz_category=selected_category)
-        
-        responses = question_responses.all()
-        
-        if not responses:
+        if not question_responses:
             # No responses yet
             analytics = {
                 'question': question,
@@ -2171,16 +2314,16 @@ def admin_analytics():
             }
         else:
             # Calculate real distractor analysis
-            total_responses = len(responses)
-            correct_count = sum(1 for r in responses if r.is_correct)
+            total_responses = len(question_responses)
+            correct_count = sum(1 for r in question_responses if r.is_correct)
             success_rate = (correct_count / total_responses) * 100 if total_responses > 0 else 0
             
             # Count choices A, B, C, D
             choice_counts = {
-                'A': sum(1 for r in responses if r.selected_answer == 'A'),
-                'B': sum(1 for r in responses if r.selected_answer == 'B'), 
-                'C': sum(1 for r in responses if r.selected_answer == 'C'),
-                'D': sum(1 for r in responses if r.selected_answer == 'D')
+                'A': sum(1 for r in question_responses if r.selected_answer == 'A'),
+                'B': sum(1 for r in question_responses if r.selected_answer == 'B'), 
+                'C': sum(1 for r in question_responses if r.selected_answer == 'C'),
+                'D': sum(1 for r in question_responses if r.selected_answer == 'D')
             }
             
             analytics = {
@@ -2198,8 +2341,10 @@ def admin_analytics():
     
     return render_template('admin/analytics.html',
                          title='Quiz Analytics - Real Distractor Analysis',
-                         selected_category=selected_category,
-                         active_set_obj=active_set_obj,
+                         selected_category=selected_set.quiz_category,
+                         selected_set=selected_set,
+                         all_sets=all_sets,
+                         active_set_obj=selected_set,
                          stats=stats,
                          question_analytics=question_analytics)
 
@@ -2209,19 +2354,25 @@ def admin_analytics_export():
     """Export analytics data as CSV"""
     from app.models import StudentResponse
     
-    selected_category = request.args.get('category', '')
+    set_id_param = request.args.get('set_id')
+    selected_set = None
     
-    # Get questions and filter by active set if applicable
-    questions_query = Questions.query
-    active_set = None
+    if set_id_param and set_id_param.isdigit():
+        selected_set = QuestionSet.query.get(int(set_id_param))
+    else:
+        # Default: Use active set for the currently selected class section
+        active_section = session.get('active_section_name', 'General')
+        default_category = 'General'
+        if active_section != 'All Classes':
+            default_category = active_section
+        selected_set = get_active_question_set(default_category)
     
-    if selected_category:
-        active_set = get_active_question_set(selected_category)
-        questions_query = questions_query.filter_by(quiz_category=selected_category)
-        if active_set:
-             questions_query = questions_query.filter_by(question_set_id=active_set.id)
-             
-    questions = questions_query.order_by(Questions.quiz_category, Questions.q_id).all()
+    if not selected_set:
+        flash('No question set selected for export.', 'error')
+        return redirect(url_for('admin_analytics'))
+    
+    # Get questions for this specific question set
+    questions = Questions.query.filter_by(question_set_id=selected_set.id).order_by(Questions.q_id).all()
     
     # Create CSV in memory
     output = io.StringIO()
@@ -2231,14 +2382,11 @@ def admin_analytics_export():
     writer.writerow(['Question ID', 'Category', 'Question Text', 'Correct Answer', 'Total Responses', 'Success Rate', 'Correct Count', 'A Count', 'B Count', 'C Count', 'D Count'])
     
     for question in questions:
-        # Query responses for this question
-        response_query = StudentResponse.query.filter_by(question_id=question.q_id)
-        if selected_category:
-            response_query = response_query.filter_by(quiz_category=selected_category)
-            if active_set:
-                response_query = response_query.filter_by(question_set_id=active_set.id)
-        
-        responses = response_query.all()
+        # Query responses for this question in this set
+        responses = StudentResponse.query.filter_by(
+            question_id=question.q_id,
+            question_set_id=selected_set.id
+        ).all()
         
         total_responses = len(responses)
         correct_count = sum(1 for r in responses if r.is_correct)
@@ -2273,7 +2421,8 @@ def admin_analytics_export():
     response = make_response(csv_data)
     response.headers['Content-Type'] = 'text/csv'
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    filename = f'analytics_export_{selected_category}_{timestamp}.csv' if selected_category else f'analytics_export_all_{timestamp}.csv'
+    safe_set_name = selected_set.name.replace(' ', '_').replace('/', '_')
+    filename = f'analytics_export_{safe_set_name}_{timestamp}.csv'
     response.headers['Content-Disposition'] = f'attachment; filename={filename}'
     
     return response
@@ -2281,26 +2430,28 @@ def admin_analytics_export():
 @app.route('/admin/analytics/reset', methods=['POST'])
 @admin_required
 def admin_analytics_reset():
-    """Reset analytics data (StudentResponse records)"""
+    """Reset analytics data (StudentResponse records) for a specific question set"""
     from app.models import StudentResponse
     
-    category = request.form.get('category')
+    set_id_param = request.form.get('set_id')
     
     try:
-        if category:
-            # Delete only for specific category
-            deleted_count = StudentResponse.query.filter_by(quiz_category=category).delete()
-            msg = f'Analytics data for category "{category}" has been reset. ({deleted_count} records deleted)'
+        if set_id_param and set_id_param.isdigit():
+            selected_set = QuestionSet.query.get(int(set_id_param))
+            if selected_set:
+                # Delete only for specific question set
+                deleted_count = StudentResponse.query.filter_by(question_set_id=selected_set.id).delete()
+                msg = f'Analytics data for "{selected_set.name}" has been reset. ({deleted_count} records deleted)'
+                db.session.commit()
+                flash(msg, 'success')
+                return redirect(url_for('admin_analytics', set_id=selected_set.id))
+            else:
+                flash('Question set not found.', 'error')
         else:
-            # Delete all
-            deleted_count = StudentResponse.query.delete()
-            msg = f'All analytics data has been reset. ({deleted_count} records deleted)'
-            
-        db.session.commit()
-        flash(msg, 'success')
+            flash('Invalid question set ID.', 'error')
         
     except Exception as e:
         db.session.rollback()
         flash(f'Error resetting analytics data: {str(e)}', 'error')
     
-    return redirect(url_for('admin_analytics', category=category if category else None))
+    return redirect(url_for('admin_analytics'))

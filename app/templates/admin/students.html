@@ -4,26 +4,39 @@
 <div class="container mt-4">
     <div class="row mb-4 align-items-center">
         <div class="col-xl-4 col-lg-12 mb-3 mb-xl-0">
-            <h2 class="text-dark font-weight-bold m-0 text-nowrap"><i class="fas fa-graduation-cap text-primary mr-2"></i>Student Performance</h2>
+            <h2 class="text-dark font-weight-bold m-0 text-nowrap"><i
+                    class="fas fa-graduation-cap text-primary mr-2"></i>Student Performance</h2>
         </div>
-        
+
         <div class="col-xl-8 col-lg-12">
             <div class="d-flex flex-wrap justify-content-xl-end align-items-center">
-                
-                <!-- Randomize Group -->
-                <div class="btn-group shadow-sm mr-2 mb-2">
-                    <span class="input-group-text bg-white border-right-0 font-weight-bold text-muted" style="border-radius: .25rem 0 0 .25rem; border: 1px solid #dee2e6;"><i class="fas fa-random mr-2"></i> Randomize</span>
-                    <form method="POST" action="{{ url_for('admin_toggle_shuffle_all') }}" class="d-flex">
-                        <input type="hidden" name="enable" value="true">
-                        <button type="submit" class="btn btn-white font-weight-bold text-success border-left-0 border-right-0" style="border-radius: 0;" title="Turn ON">ON</button>
-                    </form>
-                    <form method="POST" action="{{ url_for('admin_toggle_shuffle_all') }}" class="d-flex">
-                        <input type="hidden" name="enable" value="false">
-                        <button type="submit" class="btn btn-white font-weight-bold text-danger border-left-0" style="border-radius: 0 .25rem .25rem 0;" title="Turn OFF">OFF</button>
-                    </form>
+
+                <!-- Randomize Dropdown -->
+                <div class="dropdown mr-2 mb-2">
+                    <button class="btn btn-white shadow-sm dropdown-toggle font-weight-bold" type="button"
+                        id="randomizeDropdown" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                        <i class="fas fa-random text-primary mr-1"></i> Randomize
+                    </button>
+                    <div class="dropdown-menu" aria-labelledby="randomizeDropdown">
+                        <!-- Enable Form -->
+                        <form method="POST" action="{{ url_for('admin_toggle_shuffle_all') }}" class="px-0 m-0">
+                            <input type="hidden" name="enable" value="true">
+                            <button type="submit" class="dropdown-item text-success font-weight-bold">
+                                <i class="fas fa-check-circle mr-2"></i> Enable for All
+                            </button>
+                        </form>
+
+                        <!-- Disable Form -->
+                        <form method="POST" action="{{ url_for('admin_toggle_shuffle_all') }}" class="px-0 m-0">
+                            <input type="hidden" name="enable" value="false">
+                            <button type="submit" class="dropdown-item text-danger font-weight-bold">
+                                <i class="fas fa-times-circle mr-2"></i> Disable for All
+                            </button>
+                        </form>
+                    </div>
                 </div>
 
-                <!-- Management Group -->
+                <!-- Management & Data Group -->
                 <div class="btn-group shadow-sm mr-2 mb-2">
                     <a href="{{ url_for('admin_add_student') }}" class="btn btn-white font-weight-bold">
                         <i class="fas fa-plus mr-1 text-primary"></i> Add
@@ -31,22 +44,24 @@
                     <a href="{{ url_for('admin_bulk_upload_students') }}" class="btn btn-white font-weight-bold">
                         <i class="fas fa-file-upload mr-1 text-info"></i> Upload
                     </a>
-                </div>
-
-                <!-- Data Actions Group -->
-                <div class="btn-group shadow-sm mr-2 mb-2">
                     <a href="{{ url_for('admin_export_scores') }}" class="btn btn-white font-weight-bold">
                         <i class="fas fa-download mr-1 text-secondary"></i> CSV
                     </a>
-                    <form method="POST" action="{{ url_for('admin_reset_all_scores') }}" onsubmit="return confirm('Are you sure you want to reset ALL student scores?');" class="d-flex">
-                        <button type="submit" class="btn btn-white font-weight-bold text-warning border-left-0" style="border-radius: 0 .25rem .25rem 0;">
-                            <i class="fas fa-undo mr-1"></i> Reset
-                        </button>
-                    </form>
                 </div>
 
                 <!-- Leaderboard -->
-                <a href="{{ url_for('leaderboard') }}" class="btn btn-primary shadow-sm font-weight-bold px-3 mb-2"><i class="fas fa-trophy mr-1"></i> Leaderboard</a>
+                <a href="{{ url_for('leaderboard') }}" class="btn btn-primary shadow-sm font-weight-bold mr-2 mb-2">
+                    <i class="fas fa-trophy mr-1"></i> Leaderboard
+                </a>
+
+                <!-- Danger Zone: Reset -->
+                <form method="POST" action="{{ url_for('admin_reset_all_scores') }}"
+                    onsubmit="return confirm('Are you sure you want to reset ALL student scores? This cannot be undone.');"
+                    class="mb-2">
+                    <button type="submit" class="btn btn-warning shadow-sm font-weight-bold">
+                        <i class="fas fa-undo mr-1"></i> Reset All
+                    </button>
+                </form>
             </div>
         </div>
     </div>
@@ -54,202 +69,218 @@
 
     <!-- Section Filter -->
     <div class="row mb-3">
-        <div class="col-md-4">
+        <div class="col-md-6">
             <form action="{{ url_for('admin_students') }}" method="get">
                 <div class="input-group">
                     <div class="input-group-prepend">
-                        <label class="input-group-text" for="sectionFilter"><i class="fas fa-filter mr-2"></i> Filter by Section</label>
+                        <label class="input-group-text" for="sectionFilter"><i class="fas fa-filter mr-2"></i> Filter by
+                            Section</label>
                     </div>
                     <select class="custom-select" id="sectionFilter" name="section" onchange="this.form.submit()">
-                        <option value="All" {% if selected_section == 'All' %}selected{% endif %}>All Sections</option>
+                        <option value="All" {% if selected_section=='All' %}selected{% endif %}>All Sections</option>
                         {% for section in sections %}
-                            <option value="{{ section }}" {% if selected_section == section %}selected{% endif %}>{{ section }}</option>
+                        <option value="{{ section }}" {% if selected_section==section %}selected{% endif %}>{{ section
+                            }}</option>
                         {% endfor %}
                     </select>
                 </div>
             </form>
         </div>
+        {% if selected_set %}
+        <div class="col-md-6">
+            <div class="alert alert-info mb-0 py-2 d-flex align-items-center">
+                <i class="fas fa-info-circle mr-2"></i>
+                <div>
+                    <strong>Active Question Set:</strong> {{ selected_set.name }} ({{ selected_set.quiz_category }})
+                    <br>
+                    <small class="text-muted">Scores shown are for this Question Set and will persist until reset.</small>
+                </div>
+            </div>
+        </div>
+        {% endif %}
     </div>
 
     {% if students %}
-        <div class="row">
-            <div class="col-12">
-                <!-- Summary Stats -->
-                <div class="row mb-4">
-                    <div class="col-md-3">
-                        <div class="card bg-primary text-white">
-                            <div class="card-body text-center">
-                                <h4>{{ students|length }}</h4>
-                                <p class="mb-0">Students ({{ selected_section }})</p>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-3">
-                        <div class="card bg-success text-white">
-                            <div class="card-body text-center">
-                                <h4>{{ students|selectattr("legacy_marks")|list|length }}</h4>
-                                <p class="mb-0">Attempted Quiz</p>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-3">
-                        <div class="card bg-info text-white">
-                            <div class="card-body text-center">
-                                {% set mark_list = students|map(attribute='marks')|select|list %}
-                                {% if mark_list|length > 0 %}
-                                    <h4>{{ (mark_list|sum / mark_list|length)|round(1) }}</h4>
-                                {% else %}
-                                    <h4>0</h4>
-                                {% endif %}
-                                <p class="mb-0">Average Score</p>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-3">
-                        <div class="card bg-warning text-white">
-                            <div class="card-body text-center">
-                                {% set mark_list = students|map(attribute='marks')|select|list %}
-                                {% if mark_list|length > 0 %}
-                                    <h4>{{ mark_list|max }}</h4>
-                                {% else %}
-                                    <h4>0</h4>
-                                {% endif %}
-                                <p class="mb-0">Highest Score</p>
-                            </div>
+    <div class="row">
+        <div class="col-12">
+            <!-- Summary Stats -->
+            <div class="row mb-4">
+                <div class="col-md-3">
+                    <div class="card bg-primary text-white">
+                        <div class="card-body text-center">
+                            <h4>{{ students|length }}</h4>
+                            <p class="mb-0">Students ({{ selected_section }})</p>
                         </div>
                     </div>
                 </div>
+                <div class="col-md-3">
+                    <div class="card bg-success text-white">
+                        <div class="card-body text-center">
+                            {% set attempted = students|selectattr("quiz_score")|list %}
+                            <h4>{{ attempted|length }}</h4>
+                            <p class="mb-0">Attempted Quiz</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card bg-info text-white">
+                        <div class="card-body text-center">
+                            {% set score_list = students|map(attribute='quiz_score')|select|list %}
+                            {% if score_list|length > 0 %}
+                            <h4>{{ (score_list|sum / score_list|length)|round(1) }}</h4>
+                            {% else %}
+                            <h4>0</h4>
+                            {% endif %}
+                            <p class="mb-0">Average Score</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card bg-warning text-white">
+                        <div class="card-body text-center">
+                            {% set score_list = students|map(attribute='quiz_score')|select|list %}
+                            {% if score_list|length > 0 %}
+                            <h4>{{ score_list|max }}</h4>
+                            {% else %}
+                            <h4>0</h4>
+                            {% endif %}
+                            <p class="mb-0">Highest Score</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
 
-                <!-- Students Table -->
-                <div class="card">
-                    <div class="card-header">
-                        <h5 class="mb-0">All Students (Ranked by Score)</h5>
-                    </div>
-                    <div class="card-body p-0">
-                        <div class="table-responsive">
-                            <table class="table table-hover mb-0">
-                                <thead class="thead-light">
-                                    <tr>
-                                        <th style="width: 80px;">Rank</th>
-                                        <th>Username</th>
-                                        <th>Email</th>
-                                        <th>Section</th>
-                                        <th style="width: 100px;">Score</th>
-                                        <th style="width: 120px;">Status</th>
-                                        <th style="width: 120px;">Category</th>
-                                        <th style="width: 150px;">Date</th>
-                                        <th style="width: 120px;" class="text-center">Randomize</th>
-                                        <th style="width: 100px;">Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {% for student in students %}
-                                        <tr>
-                                            <td>
-                                                {% if loop.index <= 3 and student.quiz_score and student.quiz_score > 0 %}
-                                                    {% if loop.index == 1 %}
-                                                        <span class="badge badge-warning">🥇 #{{ loop.index }}</span>
-                                                    {% elif loop.index == 2 %}
-                                                        <span class="badge badge-secondary">🥈 #{{ loop.index }}</span>
-                                                    {% elif loop.index == 3 %}
-                                                        <span class="badge badge-dark">🥉 #{{ loop.index }}</span>
-                                                    {% endif %}
-                                                {% else %}
-                                                    <span class="badge badge-light">#{{ loop.index }}</span>
-                                                {% endif %}
-                                            </td>
-                                            <td>
-                                                <strong>{{ student.username }}</strong>
-                                            </td>
-                                            <td>
-                                                <small class="text-muted">{{ student.email }}</small>
-                                            </td>
-                                            <td>
-                                                <span class="badge badge-light border">{{ student.section }}</span>
-                                            </td>
-                                            <td>
-                                                {% if student.display_score != 'Not Started' %}
-                                                    <span class="badge badge-success badge-lg">{{ student.display_score }} pts</span>
-                                                {% else %}
-                                                    <span class="badge badge-light">No score</span>
-                                                {% endif %}
-                                            </td>
-                                            <td>
-                                                {% if student.quiz_status == 'completed' %}
-                                                    <span class="badge badge-success">Completed</span>
-                                                {% elif student.quiz_status == 'incomplete' %}
-                                                    <span class="badge badge-warning">Incomplete</span>
-                                                {% else %}
-                                                    <span class="badge badge-secondary">Not Started</span>
-                                                {% endif %}
-                                            </td>
-                                            <td>
-                                                {% if student.quiz_category %}
-                                                    <span class="badge badge-info">{{ student.quiz_category }}</span>
-                                                {% else %}
-                                                    <span class="text-muted">-</span>
-                                                {% endif %}
-                                            </td>
-                                            <td>
-                                                {% if student.quiz_timestamp %}
-                                                    <small>{{ student.quiz_timestamp.strftime('%Y-%m-%d %H:%M') }}</small>
-                                                {% else %}
-                                                    <span class="text-muted">-</span>
-                                                {% endif %}
-                                            </td>
-                                            <td class="text-center">
-                                                <button type="button" 
-                                                        class="btn btn-sm {{ 'btn-success' if student.shuffle_questions else 'btn-outline-secondary' }}" 
-                                                        onclick="toggleShuffle({{ student.id }}, this)"
-                                                        title="Toggle Randomization">
-                                                    {% if student.shuffle_questions %}
-                                                        <i class="fas fa-random"></i> On
-                                                    {% else %}
-                                                        <i class="fas fa-sort-numeric-down"></i> Off
-                                                    {% endif %}
-                                                </button>
-                                            </td>
-                                            <td>
-                                                {% if student.quiz_score is not none and student.quiz_score > 0 %}
-                                                    <button type="button" class="btn btn-sm btn-outline-warning" 
-                                                            onclick="confirmReset('{{ student.username }}', {{ student.id }})" 
-                                                            title="Reset Score">
-                                                        <i class="fas fa-redo"></i>
-                                                    </button>
-                                                {% endif %}
-                                            </td>
-                                        </tr>
-                                    {% endfor %}
-                                </tbody>
-                            </table>
-                        </div>
+            <!-- Students Table -->
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">All Students (Ranked by Score)</h5>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead class="thead-light">
+                                <tr>
+                                    <th style="width: 80px;">Rank</th>
+                                    <th>Username</th>
+                                    <th>Email</th>
+                                    <th>Section</th>
+                                    <th style="width: 100px;">Score</th>
+                                    <th style="width: 120px;">Status</th>
+                                    <th style="width: 120px;">Category</th>
+                                    <th style="width: 150px;">Date</th>
+                                    <th style="width: 120px;" class="text-center">Randomize</th>
+                                    <th style="width: 100px;">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for student in students %}
+                                <tr>
+                                    <td>
+                                        {% if loop.index <= 3 and student.quiz_score and student.quiz_score> 0 %}
+                                            {% if loop.index == 1 %}
+                                            <span class="badge badge-warning">🥇 #{{ loop.index }}</span>
+                                            {% elif loop.index == 2 %}
+                                            <span class="badge badge-secondary">🥈 #{{ loop.index }}</span>
+                                            {% elif loop.index == 3 %}
+                                            <span class="badge badge-dark">🥉 #{{ loop.index }}</span>
+                                            {% endif %}
+                                            {% else %}
+                                            <span class="badge badge-light">#{{ loop.index }}</span>
+                                            {% endif %}
+                                    </td>
+                                    <td>
+                                        <strong>{{ student.username }}</strong>
+                                    </td>
+                                    <td>
+                                        <small class="text-muted">{{ student.email }}</small>
+                                    </td>
+                                    <td>
+                                        <span class="badge badge-light border">{{ student.section }}</span>
+                                    </td>
+                                    <td>
+                                        {% if student.display_score != 'Not Started' %}
+                                        <span class="badge badge-success badge-lg">{{ student.display_score }}
+                                            pts</span>
+                                        {% else %}
+                                        <span class="badge badge-light">No score</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if student.quiz_status == 'completed' %}
+                                        <span class="badge badge-success">Completed</span>
+                                        {% elif student.quiz_status == 'incomplete' %}
+                                        <span class="badge badge-warning">Incomplete</span>
+                                        {% else %}
+                                        <span class="badge badge-secondary">Not Started</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if student.quiz_category %}
+                                        <span class="badge badge-info">{{ student.quiz_category }}</span>
+                                        {% else %}
+                                        <span class="text-muted">-</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if student.quiz_timestamp %}
+                                        <small>{{ student.quiz_timestamp.strftime('%Y-%m-%d %H:%M') }}</small>
+                                        {% else %}
+                                        <span class="text-muted">-</span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="text-center">
+                                        <button type="button"
+                                            class="btn btn-sm {{ 'btn-success' if student.shuffle_questions else 'btn-outline-secondary' }}"
+                                            onclick="toggleShuffle({{ student.id }}, this)"
+                                            title="Toggle Randomization">
+                                            {% if student.shuffle_questions %}
+                                            <i class="fas fa-random"></i> On
+                                            {% else %}
+                                            <i class="fas fa-sort-numeric-down"></i> Off
+                                            {% endif %}
+                                        </button>
+                                    </td>
+                                    <td>
+                                        {% if student.quiz_score is not none and student.quiz_score > 0 %}
+                                        <button type="button" class="btn btn-sm btn-outline-warning"
+                                            onclick="confirmReset('{{ student.username }}', {{ student.id }})"
+                                            title="Reset Score">
+                                            <i class="fas fa-redo"></i>
+                                        </button>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
                     </div>
                 </div>
             </div>
         </div>
+    </div>
     {% else %}
-        <div class="row">
-            <div class="col-12">
-                <div class="card">
-                    <div class="card-body text-center py-5">
-                        <i class="fas fa-users fa-3x text-muted mb-3"></i>
-                        <h4 class="text-muted">No Students Found</h4>
-                        {% if selected_section != 'All' %}
-                            <p class="text-muted">No students in section "<strong>{{ selected_section }}</strong>".</p>
-                            <a href="{{ url_for('admin_students') }}" class="btn btn-secondary">Show All</a>
-                        {% else %}
-                            <p class="text-muted">Students can register themselves, or you can add them using bulk upload.</p>
-                            <a href="{{ url_for('admin_add_student') }}" class="btn btn-primary mr-2">
-                                <i class="fas fa-user-plus"></i> Add Student
-                            </a>
-                            <a href="{{ url_for('admin_bulk_upload_students') }}" class="btn btn-info">
-                                <i class="fas fa-upload"></i> Bulk Upload Students
-                            </a>
-                        {% endif %}
-                    </div>
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body text-center py-5">
+                    <i class="fas fa-users fa-3x text-muted mb-3"></i>
+                    <h4 class="text-muted">No Students Found</h4>
+                    {% if selected_section != 'All' %}
+                    <p class="text-muted">No students in section "<strong>{{ selected_section }}</strong>".</p>
+                    <a href="{{ url_for('admin_students') }}" class="btn btn-secondary">Show All</a>
+                    {% else %}
+                    <p class="text-muted">Students can register themselves, or you can add them using bulk upload.</p>
+                    <a href="{{ url_for('admin_add_student') }}" class="btn btn-primary mr-2">
+                        <i class="fas fa-user-plus"></i> Add Student
+                    </a>
+                    <a href="{{ url_for('admin_bulk_upload_students') }}" class="btn btn-info">
+                        <i class="fas fa-upload"></i> Bulk Upload Students
+                    </a>
+                    {% endif %}
                 </div>
             </div>
         </div>
+    </div>
     {% endif %}
 </div>
 
@@ -284,59 +315,59 @@
 
 
 <script>
-function confirmReset(studentName, studentId) {
-    document.getElementById('resetStudentName').textContent = studentName;
-    document.getElementById('resetForm').action = "{{ url_for('admin_reset_student_score', user_id=0) }}".replace('/0', '/' + studentId);
-    $('#resetModal').modal('show');
-}
+    function confirmReset(studentName, studentId) {
+        document.getElementById('resetStudentName').textContent = studentName;
+        document.getElementById('resetForm').action = "{{ url_for('admin_reset_student_score', user_id=0) }}".replace('/0', '/' + studentId);
+        $('#resetModal').modal('show');
+    }
 
-function toggleShuffle(userId, btn) {
-    // Disable button during request
-    btn.disabled = true;
-    const originalContent = btn.innerHTML;
-    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
-    
-    fetch("{{ url_for('admin_toggle_shuffle', user_id=0) }}".replace('/0', '/' + userId), {
-        method: 'POST',
-        headers: {
-            'Accept': 'application/json',
-            'X-Requested-With': 'XMLHttpRequest'
-        }
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.status === 'success') {
-            // Update button state
-            if (data.new_state) {
-                // Enabled
-                btn.className = 'btn btn-sm btn-success';
-                btn.innerHTML = '<i class="fas fa-random"></i> On';
-            } else {
-                // Disabled
-                btn.className = 'btn btn-sm btn-outline-secondary';
-                btn.innerHTML = '<i class="fas fa-sort-numeric-down"></i> Off';
+    function toggleShuffle(userId, btn) {
+        // Disable button during request
+        btn.disabled = true;
+        const originalContent = btn.innerHTML;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+
+        fetch("{{ url_for('admin_toggle_shuffle', user_id=0) }}".replace('/0', '/' + userId), {
+            method: 'POST',
+            headers: {
+                'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
             }
-            // Optional: Show a small toast or checkmark?
-        } else {
-            alert('Error: ' + data.message);
-            btn.innerHTML = originalContent;
-        }
-    })
-    .catch(error => {
-        console.error('Error:', error);
-        alert('An error occurred while communicating with the server.');
-        btn.innerHTML = originalContent;
-    })
-    .finally(() => {
-        btn.disabled = false;
-    });
-}
+        })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    // Update button state
+                    if (data.new_state) {
+                        // Enabled
+                        btn.className = 'btn btn-sm btn-success';
+                        btn.innerHTML = '<i class="fas fa-random"></i> On';
+                    } else {
+                        // Disabled
+                        btn.className = 'btn btn-sm btn-outline-secondary';
+                        btn.innerHTML = '<i class="fas fa-sort-numeric-down"></i> Off';
+                    }
+                    // Optional: Show a small toast or checkmark?
+                } else {
+                    alert('Error: ' + data.message);
+                    btn.innerHTML = originalContent;
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('An error occurred while communicating with the server.');
+                btn.innerHTML = originalContent;
+            })
+            .finally(() => {
+                btn.disabled = false;
+            });
+    }
 </script>
 
 <style>
-.badge-lg {
-    padding: 0.5rem 0.75rem;
-    font-size: 0.9rem;
-}
+    .badge-lg {
+        padding: 0.5rem 0.75rem;
+        font-size: 0.9rem;
+    }
 </style>
 {% endblock %}
